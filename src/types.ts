@@ -1,4 +1,4 @@
-import type { DayKey, MEASURES } from './program';
+import type { DayDef, DayKey, MEASURES } from './program';
 import { addDays, todayKey } from './utils';
 
 export type MeasureKey = (typeof MEASURES)[number]['key'];
@@ -42,6 +42,7 @@ export interface MoneyData {
   savePct: number; // share of each income to move into savings
   dailyEstimate: number | null; // rough daily spend, used until a month of data exists
   survivalOpening: number; // already in the survival fund before tracking began
+  categories?: string[]; // spending categories; the built-in list when absent
 }
 
 export const emptyMoney = (): MoneyData => ({ txns: [], savePct: 20, dailyEstimate: null, survivalOpening: 0 });
@@ -172,6 +173,9 @@ export interface AppData {
   rewards: RewardsData;
   advisor: AdvisorData;
   plans: PlanItem[];
+  /** When each single-value setting was last changed, so merging keeps the most recent one. */
+  stamps?: Record<string, string>;
+  program?: DayDef[]; // the person's own training programme; the built-in one when absent
   /** Ids of things the user deleted, so a merge from another device does not bring them back. */
   gone: string[];
   /** When the user last changed anything on this device; the newer device wins a merge conflict. */

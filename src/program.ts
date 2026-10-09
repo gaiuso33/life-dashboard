@@ -19,7 +19,7 @@ export interface DayDef {
   exercises: ExerciseDef[];
 }
 
-export const PROGRAM: DayDef[] = [
+export const DEFAULT_PROGRAM: DayDef[] = [
   {
     key: 'push',
     title: 'Push',
@@ -80,9 +80,40 @@ export const PROGRAM: DayDef[] = [
   },
 ];
 
-export const DAY_BY_WEEKDAY: Record<number, DayKey> = { 1: 'push', 3: 'pull', 5: 'legs' };
+/**
+ * The programme in use. The store sets it from the saved data whenever that changes, so every screen
+ * reads the person's own programme (or the default) through these functions.
+ */
+let active: DayDef[] = DEFAULT_PROGRAM;
+export const getProgram = (): DayDef[] => active;
+export const setActiveProgram = (p?: DayDef[]) => {
+  active = p && programError(p) == null ? p : DEFAULT_PROGRAM;
+};
+export const dayDef = (k: DayKey): DayDef => active.find((d) => d.key === k)!;
+export const dayForWeekday = (wd: number): DayKey | null => active.find((d) => d.weekday === wd)?.key ?? null;
+export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export const dayDef = (k: DayKey): DayDef => PROGRAM.find((d) => d.key === k)!;
+/** Returns a plain-words problem with a programme, or null when it is usable. */
+export function programError(p: DayDef[]): string | null {
+  const keys: DayKey[] = ['push', 'pull', 'legs'];
+  if (!Array.isArray(p) || p.length !== 3 || !keys.every((k) => p.some((d) => d.key === k))) return 'The programme needs a push, a pull and a legs day.';
+  const days = p.map((d) => d.weekday);
+  if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) return 'Pick a weekday for every session.';
+  if (new Set(days).size !== 3) return 'Two sessions are on the same weekday. Give each its own day.';
+  for (const d of p) {
+    if (!d.title.trim()) return 'Every session needs a name.';
+    if (d.exercises.length === 0) return `${d.title} has no exercises. Add at least one.`;
+    const ids = new Set<string>();
+    for (const e of d.exercises) {
+      if (!e.name.trim()) return `${d.title} has an exercise without a name.`;
+      if (ids.has(e.id)) return `${d.title} has a duplicate exercise.`;
+      ids.add(e.id);
+      if (!Number.isInteger(e.sets) || e.sets < 1 || e.sets > 10) return `${e.name}: sets must be from 1 to 10.`;
+      if (!Number.isInteger(e.min) || !Number.isInteger(e.max) || e.min < 1 || e.max < e.min || e.max > 200) return `${e.name}: the range must go from a smaller number up to a larger one.`;
+    }
+  }
+  return null;
+}
 
 export interface MobilityStep {
   id: string;

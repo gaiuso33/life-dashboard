@@ -14,6 +14,9 @@ export const CATEGORIES = [
   'Other',
 ] as const;
 
+export const PROTECTED_CATEGORIES = ['Rewards', 'Other'];
+export const categoriesOf = (data: AppData): string[] => data.money.categories ?? [...CATEGORIES];
+
 export const DAYS_PER_MONTH = 30.4375;
 /** Days of spending history needed before the survival target is calculated from real data. */
 export const HISTORY_NEEDED = 28;

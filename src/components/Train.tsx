@@ -1,12 +1,11 @@
 import { lastSession, plannedFor, readyForMoreLoad, sessionProgress } from '../derive';
 import type { TrainView } from '../nav';
-import { MOBILITY, PROGRAM, dayDef } from '../program';
+import { MOBILITY, WEEKDAY_SHORT, dayDef, getProgram } from '../program';
 import type { DayKey, ExerciseDef } from '../program';
 import { useStore } from '../store';
 import type { Session } from '../types';
 import { fmtShort, todayKey, weekdayName } from '../utils';
 
-const WEEKDAY_FOR: Record<DayKey, string> = { push: 'Mon', pull: 'Wed', legs: 'Fri' };
 
 export function Train({ view, setView }: { view: TrainView; setView: (v: TrainView) => void }) {
   const today = todayKey();
@@ -19,11 +18,11 @@ export function Train({ view, setView }: { view: TrainView; setView: (v: TrainVi
       </header>
 
       <div className="tabs" role="tablist" aria-label="Session">
-        {PROGRAM.map((d) => (
+        {getProgram().map((d) => (
           <button key={d.key} role="tab" aria-selected={view === d.key} onClick={() => setView(d.key)}>
             {d.title}
             <small>
-              {WEEKDAY_FOR[d.key]}
+              {WEEKDAY_SHORT[d.weekday]}
               {planned === d.key ? ', today' : ''}
             </small>
           </button>

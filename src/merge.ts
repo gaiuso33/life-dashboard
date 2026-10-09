@@ -1,3 +1,4 @@
+import { mergeScalars } from './scalars';
 import type { AppData, DayLog, PlanItem, Project, Session } from './types';
 
 const uniq = <T,>(xs: T[]) => [...new Set(xs)];
@@ -81,7 +82,7 @@ export function mergeData(local: AppData, incoming: AppData): AppData {
     if (!prev || r.at >= prev.at) reviewMap.set(r.week, r);
   }
 
-  return {
+  const base: AppData = {
     ...n,
     version: 1,
     sample: n.sample,
@@ -94,6 +95,7 @@ export function mergeData(local: AppData, incoming: AppData): AppData {
     money: {
       ...n.money,
       dailyEstimate: n.money.dailyEstimate ?? o.money.dailyEstimate,
+      categories: n.money.categories ?? o.money.categories,
       txns: unionById(o.money.txns, n.money.txns, dead).sort((a, b) => a.date.localeCompare(b.date)),
     },
     career: {
@@ -112,6 +114,15 @@ export function mergeData(local: AppData, incoming: AppData): AppData {
     advisor: { settings: n.advisor.settings, reviews: [...reviewMap.values()].sort((a, b) => b.week.localeCompare(a.week)).slice(0, 12) },
     plans: unionById(o.plans, n.plans, dead, mergePlan),
   };
+  const out = mergeScalars(base, o, n);
+  // A category used by an entry from either device always exists in the list.
+  const have = new Set(out.money.categories ?? []);
+  const missing = out.money.categories ? [...new Set(out.money.txns.map((t) => t.category).filter((c): c is string => !!c && !have.has(c)))] : [];
+  if (missing.length && out.money.categories) {
+    const tail: string[] = out.money.categories.filter((c) => c === 'Rewards' || c === 'Other');
+    out.money = { ...out.money, categories: [...out.money.categories.filter((c) => !tail.includes(c)), ...missing, ...tail] };
+  }
+  return out;
 }
 
 /** What a merge adds to this device, in words for the preview. */

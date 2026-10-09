@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { BarChart } from '../Charts';
 import type { Bar } from '../Charts';
 import {
-  CATEGORIES,
+  categoriesOf,
   DAYS_PER_MONTH,
   HISTORY_NEEDED,
   compact,
@@ -137,7 +137,7 @@ export function Money() {
                 <div className="field">
                   <span>Category</span>
                   <div className="chips" role="radiogroup" aria-label="Category">
-                    {CATEGORIES.map((c) => (
+                    {categoriesOf(data).map((c) => (
                       <button type="button" key={c} role="radio" aria-checked={category === c} onClick={() => setCategory(c)}>
                         {c}
                       </button>
@@ -208,7 +208,7 @@ export function Money() {
                       <b>{t.note || (t.kind === 'expense' ? t.category : t.kind === 'income' ? 'Income' : 'Savings transfer')}</b>
                       {t.kind === 'expense' ? (
                         <select value={t.category} aria-label={`Category for ${t.note || 'entry'}`} onChange={(e) => dispatch({ t: 'txn-cat', id: t.id, category: e.target.value })}>
-                          {CATEGORIES.map((c) => (
+                          {categoriesOf(data).map((c) => (
                             <option key={c}>{c}</option>
                           ))}
                         </select>
