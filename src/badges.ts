@@ -82,6 +82,8 @@ export interface BadgeState extends BadgeDef {
   on: string | null; // date first earned, when known
   earnedNow: boolean; // the data meets the condition today (earned may also be true from an earlier save)
   progress: string;
+  value: number; // current progress toward the target
+  target: number; // what the badge needs
   ratio: number; // 0..1 toward the target, for locked badges
   isNew: boolean;
 }
@@ -321,6 +323,8 @@ export function evaluateBadges(data: AppData, today: string): BadgeState[] {
       on: date,
       earnedNow,
       progress: earned ? '' : progress,
+      value,
+      target: goalN,
       ratio: earned ? 1 : Math.max(0, Math.min(1, goalN ? value / goalN : 0)),
       isNew: earned && recent(date),
     };

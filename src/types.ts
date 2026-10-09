@@ -126,12 +126,40 @@ export const DEFAULT_ITEMS: RewardItem[] = [
 
 export const emptyRewards = (): RewardsData => ({ items: DEFAULT_ITEMS.map((i) => ({ ...i })), claims: [], badges: {} });
 
+export const DEFAULT_MODEL = 'claude-sonnet-5-5';
+
+export type ShareArea = 'training' | 'body' | 'money' | 'career' | 'rewards';
+
+export interface AdvisorSettings {
+  model: string;
+  /** Which areas of numbers may be sent to the AI. Never includes notes, names or other free text. */
+  share: Record<ShareArea, boolean>;
+}
+
+export interface AiReview {
+  week: string; // Monday of the week reviewed
+  text: string;
+  at: string; // ISO timestamp it was written
+  model: string;
+}
+
+export interface AdvisorData {
+  settings: AdvisorSettings;
+  reviews: AiReview[];
+}
+
+export const emptyAdvisor = (): AdvisorData => ({
+  settings: { model: DEFAULT_MODEL, share: { training: true, body: true, money: true, career: true, rewards: true } },
+  reviews: [],
+});
+
 export interface AppData {
   version: 1;
   sample: boolean;
   money: MoneyData;
   career: CareerData;
   rewards: RewardsData;
+  advisor: AdvisorData;
   days: Record<string, DayLog>;
   sessions: Record<string, Session>; // key: `${date}|${day}`
   body: BodyEntry[]; // ascending by date
@@ -146,6 +174,7 @@ export const emptyData = (): AppData => ({
   money: emptyMoney(),
   career: emptyCareer(),
   rewards: emptyRewards(),
+  advisor: emptyAdvisor(),
   days: {},
   sessions: {},
   body: [],

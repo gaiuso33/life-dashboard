@@ -1,6 +1,6 @@
 import { DAY_BY_WEEKDAY, PROGRAM, dayDef } from './program';
 import type { AppData, BodyEntry, CareerData, DayLog, MoneyData, Session, Txn } from './types';
-import { emptyCareer, emptyMoney, emptyRewards, sessionKey } from './types';
+import { emptyAdvisor, emptyCareer, emptyMoney, emptyRewards, sessionKey } from './types';
 import { addDays, clamp, mondayOf, round1, todayKey, weekday } from './utils';
 
 // Small deterministic generator so the sample looks the same on every load.
@@ -118,7 +118,7 @@ export function buildSampleData(): AppData {
 
   const rewards = emptyRewards();
   rewards.claims.push({ id: 'sample-claim', tier: 'week', period: addDays(mondayOf(today), -14), itemId: 'i-rest', name: 'Rest or gaming hour', cost: 0, date: addDays(mondayOf(today), -8), logged: false });
-  return { version: 1, sample: true, money: buildSampleMoney(rand, start, today), career: buildSampleCareer(rand, start, today), rewards, days, sessions, body, goalWeight: null };
+  return { version: 1, sample: true, money: buildSampleMoney(rand, start, today), career: buildSampleCareer(rand, start, today), rewards, advisor: emptyAdvisor(), days, sessions, body, goalWeight: null };
 }
 
 export const exerciseCount = PROGRAM.reduce((n, d) => n + d.exercises.length, 0);

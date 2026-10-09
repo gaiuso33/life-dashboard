@@ -10,6 +10,7 @@ import { commitsOn } from '../career';
 import { CATALOG } from '../badges';
 import { naira, txnsOn } from '../money';
 import { periodsFor } from '../rewards';
+import { dailyNudges } from '../coach';
 import { addDays, fmtLong, fmtShort, mondayOf, todayKey, weekdayName } from '../utils';
 
 const colorOf = (k: ItemKey) => ITEMS.find((i) => i.key === k)!.color;
@@ -49,6 +50,7 @@ export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
   const commitsToday = commitsOn(data.career, today);
   const streak = dayStreak(data, today);
   const wStreak = weekStreak(data, today);
+  const extras = dailyNudges(data, today).filter((n) => n.kind === 'extra').slice(0, 2);
 
   return (
     <div className="page">
@@ -157,6 +159,21 @@ export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
         </section>
 
         <div className="stack">
+          {extras.length > 0 && (
+            <section className="panel">
+              <h2>Coach</h2>
+              <ul className="nudges">
+                {extras.map((n) => (
+                  <li key={n.id}>
+                    <span>{n.text}</span>
+                  </li>
+                ))}
+              </ul>
+              <button className="btn ghost" onClick={() => go('advisor')}>
+                Open advisor
+              </button>
+            </section>
+          )}
           <section className="panel">
             <h2>This week</h2>
             <ol className="week">

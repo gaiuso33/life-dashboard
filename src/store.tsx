@@ -5,7 +5,7 @@ import { LocalRepository } from './repository';
 import type { Repository } from './repository';
 import { buildSampleData } from './sample';
 import { emptyData, sessionKey } from './types';
-import type { AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
+import type { AdvisorSettings, AiReview, AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
 
 type Action =
   | { t: 'load'; data: AppData }
@@ -26,6 +26,8 @@ type Action =
   | { t: 'item-add'; item: RewardItem }
   | { t: 'item-del'; id: string }
   | { t: 'badges-earn'; earned: Record<string, string> }
+  | { t: 'advisor-set'; settings: AdvisorSettings }
+  | { t: 'review-save'; review: AiReview }
   | { t: 'fresh' };
 
 function blankSession(date: string, day: DayKey): Session {
@@ -96,6 +98,14 @@ function reducer(state: AppData, a: Action): AppData {
       return { ...state, rewards: { ...state.rewards, items: state.rewards.items.filter((i) => i.id !== a.id) } };
     case 'badges-earn':
       return { ...state, rewards: { ...state.rewards, badges: { ...a.earned, ...state.rewards.badges } } };
+    case 'advisor-set':
+      return { ...state, advisor: { ...state.advisor, settings: a.settings } };
+    case 'review-save': {
+      // One saved review per week (writing it again replaces it); only the latest twelve are kept.
+      const rest = state.advisor.reviews.filter((r) => r.week !== a.review.week);
+      const reviews = [...rest, a.review].sort((x, y) => y.week.localeCompare(x.week)).slice(0, 12);
+      return { ...state, advisor: { ...state.advisor, reviews } };
+    }
     case 'fresh':
       return emptyData();
   }

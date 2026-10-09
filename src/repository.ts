@@ -1,5 +1,5 @@
 import { buildSampleData } from './sample';
-import { emptyCareer, emptyMoney, emptyRewards } from './types';
+import { emptyAdvisor, emptyCareer, emptyMoney, emptyRewards } from './types';
 import type { AppData } from './types';
 
 /**
@@ -41,13 +41,16 @@ export class LocalRepository implements Repository {
     try {
       const parsed: unknown = JSON.parse(raw);
       if (!isAppData(parsed)) return null;
-      // Saves from before the rewards screen existed gain the default reward menu, nothing else changes.
-      if (!parsed.rewards && parsed.money && parsed.career) return { ...parsed, rewards: emptyRewards() };
-      if (!parsed.money || !parsed.career) {
-        // Saved before the money or career screens existed: sample data is rebuilt with everything included, real data keeps what it has and gains empty sections.
-        return parsed.sample ? buildSampleData() : { ...parsed, money: parsed.money ?? emptyMoney(), career: parsed.career ?? emptyCareer(), rewards: parsed.rewards ?? emptyRewards() };
-      }
-      return parsed;
+      // Sample data from before the money or career screens existed is simply rebuilt.
+      if (parsed.sample && (!parsed.money || !parsed.career)) return buildSampleData();
+      // Real data keeps everything it has and gains an empty version of any section added since it was saved.
+      return {
+        ...parsed,
+        money: parsed.money ?? emptyMoney(),
+        career: parsed.career ?? emptyCareer(),
+        rewards: parsed.rewards ?? emptyRewards(),
+        advisor: parsed.advisor ?? emptyAdvisor(),
+      };
     } catch {
       return null;
     }
