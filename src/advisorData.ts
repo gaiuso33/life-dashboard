@@ -5,6 +5,7 @@ import { weekStreak, weeklyRepTotals, weightTrend, suggestedPace } from './deriv
 import { forecasts } from './forecast';
 import { avgMonthlySpend, fundBalance, monthTotals, monthlySavingPace, survivalTarget } from './money';
 import { MEASURES } from './program';
+import { plansBetween } from './plan';
 import { periodsFor } from './rewards';
 import type { AppData, ShareArea } from './types';
 import { addDays, dayNumber, mondayOf, round1, weekdayName } from './utils';
@@ -73,7 +74,13 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
   if (share.money) {
     const month = monthTotals(data, today.slice(0, 7));
     const target = survivalTarget(data, today);
+    const ahead = plansBetween(data, today, addDays(today, 13)).filter((o) => !o.done);
     out.money = {
+      plannedNext14Days: {
+        items: ahead.length,
+        billsNaira: ahead.filter((o) => o.item.kind === 'bill').reduce((n, o) => n + o.item.amount, 0),
+        incomeNaira: ahead.filter((o) => o.item.kind === 'income').reduce((n, o) => n + o.item.amount, 0),
+      },
       spentThisWeek: sumTxns(data, 'expense', monday, today),
       spentLastWeek: sumTxns(data, 'expense', prevMonday, addDays(monday, -1)),
       daysSpendingLoggedThisWeek: loggedSpendDays(data, monday, today),

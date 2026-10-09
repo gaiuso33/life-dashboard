@@ -3,17 +3,21 @@ import { newlyEarned } from './badges';
 import { Advisor } from './components/Advisor';
 import { Body } from './components/Body';
 import { Career } from './components/Career';
+import { Month } from './components/Month';
 import { Money } from './components/Money';
+import { Sync } from './components/Sync';
 import { Rewards } from './components/Rewards';
 import { Today } from './components/Today';
 import { Train } from './components/Train';
 import type { Tab, TrainView } from './nav';
 import { nextSession, plannedFor } from './derive';
+import { agoText, daysAgo, lastExport } from './sync';
 import { useStore } from './store';
 import { addDays, todayKey } from './utils';
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'today', label: 'Today', icon: 'M4 13h6V4H4v9zm0 7h6v-5H4v5zm10 0h6v-9h-6v9zm0-16v5h6V4h-6z' },
+  { key: 'month', label: 'Month', icon: 'M7 2v2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2V2h-2v2H9V2H7zm-2 8h14v10H5V10z' },
   { key: 'train', label: 'Train', icon: 'M3 9v6h2V9H3zm3-2v10h2V7H6zm3 4v2h6v-2H9zm6-4v10h2V7h-2zm3 2v6h2V9h-2z' },
   { key: 'money', label: 'Money', icon: 'M12 2a10 10 0 100 20 10 10 0 000-20zm1 15.9V19h-2v-1.1c-1.4-.3-2.5-1.2-2.7-2.7h1.9c.2.7.8 1.1 1.8 1.1 1 0 1.7-.5 1.7-1.2 0-.8-.5-1.1-1.9-1.4-1.7-.4-3.1-1-3.1-2.7 0-1.3 1-2.2 2.3-2.5V7h2v1.2c1.2.3 2.1 1.1 2.3 2.4h-1.9c-.2-.6-.7-.9-1.5-.9-.9 0-1.5.4-1.5 1 0 .7.5 1 1.8 1.3 1.8.4 3.2 1 3.2 2.8 0 1.4-1 2.3-2.4 2.6z' },
   { key: 'career', label: 'Career', icon: 'M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z' },
@@ -28,7 +32,8 @@ function initialTrainView(): TrainView {
 }
 
 export function App() {
-  const { data, ready, dispatch, exportJson } = useStore();
+  const { data, ready, dispatch } = useStore();
+  const [syncOpen, setSyncOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('today');
   const [view, setView] = useState<TrainView>(initialTrainView);
 
@@ -45,16 +50,6 @@ export function App() {
     if (v) setView(v);
     setTab(t);
     window.scrollTo({ top: 0 });
-  };
-
-  const download = () => {
-    const blob = new Blob([exportJson()], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `life-dashboard-${todayKey()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -75,13 +70,19 @@ export function App() {
           ))}
         </nav>
         <div className="rail-foot">
-          <button className="link-btn" onClick={download}>
-            Export data (JSON)
+          <button className="link-btn" onClick={() => setSyncOpen(true)}>
+            Sync and backup
           </button>
         </div>
       </aside>
 
       <main className="main">
+        <div className="topbar">
+          {!data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
+          <button className="link-btn" onClick={() => setSyncOpen(true)}>
+            Sync and backup
+          </button>
+        </div>
         {data.sample && (
           <div className="banner" role="status">
             <p>You’re looking at sample data. Start fresh to log your own.</p>
@@ -96,6 +97,7 @@ export function App() {
           </div>
         )}
         {tab === 'today' && <Today go={go} />}
+        {tab === 'month' && <Month />}
         {tab === 'train' && <Train view={view} setView={setView} />}
         {tab === 'money' && <Money />}
         {tab === 'career' && <Career />}
@@ -103,6 +105,7 @@ export function App() {
         {tab === 'advisor' && <Advisor go={go} />}
         {tab === 'body' && <Body />}
       </main>
+      {syncOpen && <Sync onClose={() => setSyncOpen(false)} />}
     </div>
   );
 }

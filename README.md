@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.4)
+# Personal Life Dashboard — Product Spec (v0.7)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -91,7 +91,7 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 4. **Career:** GitHub sync, 5-project tracker, learning log. *(done)*
 5. **Gamification:** streaks, badges, reward tiers, claim flow. *(done)*
 6. **OPay statement import** (replaces the dropped Mono bank link).
-7. **AI advisor and forecasts.**
+7. **AI advisor and forecasts.** *(done: rules-based coach, weekly review, trend forecasts, optional Claude chat and written review)*
 8. **Hardening for pitch:** sync, accounts, onboarding for other users, analytics.
 
 ## 7. Open items
@@ -99,3 +99,26 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - GitHub sync reads public commits on default branches only, for the last 90 days. Private repositories and other branches don't appear, so the Today screen keeps a manual "mark done" for coding days.
 - Reminders: first version uses in-app prompts when the app is opened; push notifications need extra setup.
 - Phone-laptop data merge approach (export/import first; import button not built yet).
+
+## 8. Advisor (built)
+- Works offline without a key: daily nudges, weekly review (this week so far or last week), trend forecasts for weight, survival fund, portfolio pace and training volume.
+- Optional Claude layer: the page calls the Anthropic Messages API directly with a key you paste in. The key is kept in its own browser storage slot, never in the data or the JSON export.
+- Only a numbers-only summary is sent (no notes, names, project or repo titles, GitHub username, treat names). Per-area share toggles and a "show exactly what gets sent" preview.
+- Billing is through an Anthropic Console account (separate from a Claude app plan). Use a key with a low spend limit.
+- Not yet verified against the live API (the build sandbox could not reach it). If calls from a saved file are blocked by the browser, host the page or add a small proxy.
+- ML forecasting (phase 2) is still future work; current forecasts are simple trend lines.
+
+## 9. Month schedule (built)
+- Month tab: Monday-first calendar with the push/pull/legs days, four-plate dots for past days, reward-block end and goal deadline markers, and month totals (sessions, strong days, bills and income still due).
+- Plans: add a bill, income, task or event to any day, optionally repeating monthly (a 31st repeats on the last day of shorter months). Tick items off per occurrence; deleting a repeating item removes it from every month.
+- Items due today or in the next two days appear as nudges. The advisor sees only counts and naira totals for the next 14 days, never titles.
+- Not yet connected: ticking a bill does not create a Money entry; income and bill items are reminders only.
+
+## 10. Phone and laptop sync (built)
+- Storage stays on each device. "Sync and backup" (top right on every screen, and in the sidebar on laptop) downloads a JSON copy, or opens the phone share sheet, and imports a copy from another device with a preview.
+- Merge keeps anything only one device has, keeps deletions (deleted items are remembered by id so they do not come back), ORs habit flags, combines logged reps set by set, keeps the higher commit count, and the earliest badge date. Where both devices changed the same value, the more recently edited device wins. Merging the same file twice changes nothing; merging in either order gives the same result. "Replace instead" overwrites a device with the file.
+- Sample data is never mixed with real data.
+- Not included in exports: the Claude API key.
+- Installable and offline: the hosted build (dist folder) has a web app manifest, icons and a service worker. It only works when served over https, not from a saved file. Fonts from Google need internet; offline it falls back to system fonts.
+- Limits: sync is manual (export then import); there is no automatic cloud sync. If a project's milestone is deleted on the older device, the newer device's list wins. A copy hosted at a web address has separate storage from the file opened from disk, so move existing data across once with export and import.
+- Next phases: settings (edit program, rewards, categories, savings split), then first-run setup.

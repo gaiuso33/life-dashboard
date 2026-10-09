@@ -5,7 +5,7 @@ import { LocalRepository } from './repository';
 import type { Repository } from './repository';
 import { buildSampleData } from './sample';
 import { emptyData, sessionKey } from './types';
-import type { AdvisorSettings, AiReview, AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
+import type { AdvisorSettings, PlanItem, AiReview, AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
 
 type Action =
   | { t: 'load'; data: AppData }
@@ -28,6 +28,9 @@ type Action =
   | { t: 'badges-earn'; earned: Record<string, string> }
   | { t: 'advisor-set'; settings: AdvisorSettings }
   | { t: 'review-save'; review: AiReview }
+  | { t: 'plan-add'; item: PlanItem }
+  | { t: 'plan-del'; id: string }
+  | { t: 'plan-toggle'; id: string; date: string }
   | { t: 'fresh' };
 
 function blankSession(date: string, day: DayKey): Session {
@@ -40,7 +43,16 @@ function withSession(data: AppData, date: string, day: DayKey, fn: (s: Session) 
   return { ...data, sessions: { ...data.sessions, [key]: fn(current) } };
 }
 
+const withGone = (s: AppData, ...ids: string[]): AppData => ({ ...s, gone: [...new Set([...s.gone, ...ids])] });
+
+/** Every change by the user stamps the data, so merging two devices knows which one is newer. Automatic actions do not. */
 function reducer(state: AppData, a: Action): AppData {
+  const next = apply(state, a);
+  if (a.t === 'load' || a.t === 'badges-earn' || next === state) return next;
+  return { ...next, modified: new Date().toISOString() };
+}
+
+function apply(state: AppData, a: Action): AppData {
   switch (a.t) {
     case 'load':
       return a.data;
@@ -73,13 +85,17 @@ function reducer(state: AppData, a: Action): AppData {
     case 'txn-add':
       return { ...state, money: { ...state.money, txns: [...state.money.txns, a.txn] } };
     case 'txn-del':
-      return { ...state, money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== a.id) } };
+      return { ...withGone(state, a.id), money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== a.id) } };
     case 'txn-cat':
       return { ...state, money: { ...state.money, txns: state.money.txns.map((t) => (t.id === a.id ? { ...t, category: a.category } : t)) } };
     case 'money-set':
       return { ...state, money: { ...state.money, ...a.patch } };
-    case 'career-set':
-      return { ...state, career: { ...state.career, ...a.patch } };
+    case 'career-set': {
+      const career = { ...state.career, ...a.patch };
+      const kept = new Set([...career.projects.map((p) => p.id), ...career.learning.map((l) => l.id)]);
+      const removed = [...state.career.projects.map((p) => p.id), ...state.career.learning.map((l) => l.id)].filter((id) => !kept.has(id));
+      return { ...withGone(state, ...removed), career };
+    }
     case 'claim-add': {
       const c = a.claim;
       // A paid treat is also logged as a Rewards expense so Money stays honest. The txn id is derived from the claim id so undo can find it.
@@ -88,14 +104,14 @@ function reducer(state: AppData, a: Action): AppData {
     }
     case 'claim-del':
       return {
-        ...state,
+        ...withGone(state, a.id, `rw-${a.id}`),
         money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== `rw-${a.id}`) },
         rewards: { ...state.rewards, claims: state.rewards.claims.filter((c) => c.id !== a.id) },
       };
     case 'item-add':
       return { ...state, rewards: { ...state.rewards, items: [...state.rewards.items, a.item] } };
     case 'item-del':
-      return { ...state, rewards: { ...state.rewards, items: state.rewards.items.filter((i) => i.id !== a.id) } };
+      return { ...withGone(state, a.id), rewards: { ...state.rewards, items: state.rewards.items.filter((i) => i.id !== a.id) } };
     case 'badges-earn':
       return { ...state, rewards: { ...state.rewards, badges: { ...a.earned, ...state.rewards.badges } } };
     case 'advisor-set':
@@ -106,6 +122,12 @@ function reducer(state: AppData, a: Action): AppData {
       const reviews = [...rest, a.review].sort((x, y) => y.week.localeCompare(x.week)).slice(0, 12);
       return { ...state, advisor: { ...state.advisor, reviews } };
     }
+    case 'plan-add':
+      return { ...state, plans: [...state.plans, a.item] };
+    case 'plan-del':
+      return { ...withGone(state, a.id), plans: state.plans.filter((p) => p.id !== a.id) };
+    case 'plan-toggle':
+      return { ...state, plans: state.plans.map((p) => (p.id !== a.id ? p : { ...p, doneOn: p.doneOn.includes(a.date) ? p.doneOn.filter((d) => d !== a.date) : [...p.doneOn, a.date] })) };
     case 'fresh':
       return emptyData();
   }

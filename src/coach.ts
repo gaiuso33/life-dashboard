@@ -4,11 +4,12 @@ import { dayStatus, finishedSessionOn, lastSession, plannedFor, readyForMoreLoad
 import { naira, suggestedSave, survivalTarget } from './money';
 import type { Tab, TrainView } from './nav';
 import { dayDef } from './program';
+import { dueSoon } from './plan';
 import type { DayKey } from './program';
 import { TIER_LABEL, landmarksFor, periodsFor } from './rewards';
 import type { PeriodTier } from './rewards';
 import type { AppData } from './types';
-import { addDays, dayNumber, fmtShort, mondayOf, weekday } from './utils';
+import { addDays, dayNumber, fmtShort, mondayOf, weekday, weekdayName } from './utils';
 
 /* ---------- small helpers shared with the advisor summary ---------- */
 
@@ -129,6 +130,12 @@ export function dailyNudges(data: AppData, today: string, states: BadgeState[] =
     out.push({ id: 'weigh', kind: 'extra', text: 'Log your first weigh-in to start the weight trend.', go: 'body' });
   } else if (lastWeigh.date < monday && (weekdayIdx >= 4 || dayNumber(today) - dayNumber(lastWeigh.date) > 8)) {
     out.push({ id: 'weigh', kind: 'extra', text: 'Your weekly weigh-in is due. Same time of day keeps the trend honest.', go: 'body' });
+  }
+
+  // Planned items due today or in the next two days.
+  for (const o of dueSoon(data, today).slice(0, 2)) {
+    const when = o.date === today ? 'Due today' : o.date === addDays(today, 1) ? 'Due tomorrow' : `Due ${weekdayName(o.date)}`;
+    out.push({ id: `plan-${o.item.id}-${o.date}`, kind: 'extra', text: `${when}: ${o.item.title}${o.item.amount > 0 ? ` (${naira(o.item.amount)})` : ''}.`, go: 'month' });
   }
 
   // Progression: today's session if it is still to do, otherwise the next one in the week.

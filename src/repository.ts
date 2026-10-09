@@ -27,6 +27,21 @@ export function isAppData(x: unknown): x is AppData {
   );
 }
 
+/** Brings any saved or imported data up to the current shape; older saves gain an empty version of newer sections. */
+export function normalize(parsed: AppData): AppData {
+  // Sample data from before the money or career screens existed is simply rebuilt.
+  if (parsed.sample && (!parsed.money || !parsed.career)) return buildSampleData();
+  return {
+    ...parsed,
+    money: parsed.money ?? emptyMoney(),
+    career: parsed.career ?? emptyCareer(),
+    rewards: parsed.rewards ?? emptyRewards(),
+    advisor: parsed.advisor ?? emptyAdvisor(),
+    plans: Array.isArray(parsed.plans) ? parsed.plans : [],
+    gone: Array.isArray(parsed.gone) ? parsed.gone : [],
+  };
+}
+
 export class LocalRepository implements Repository {
   private memory: string | null = null;
 
@@ -41,16 +56,7 @@ export class LocalRepository implements Repository {
     try {
       const parsed: unknown = JSON.parse(raw);
       if (!isAppData(parsed)) return null;
-      // Sample data from before the money or career screens existed is simply rebuilt.
-      if (parsed.sample && (!parsed.money || !parsed.career)) return buildSampleData();
-      // Real data keeps everything it has and gains an empty version of any section added since it was saved.
-      return {
-        ...parsed,
-        money: parsed.money ?? emptyMoney(),
-        career: parsed.career ?? emptyCareer(),
-        rewards: parsed.rewards ?? emptyRewards(),
-        advisor: parsed.advisor ?? emptyAdvisor(),
-      };
+      return normalize(parsed);
     } catch {
       return null;
     }

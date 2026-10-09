@@ -153,6 +153,17 @@ export const emptyAdvisor = (): AdvisorData => ({
   reviews: [],
 });
 
+export type PlanKind = 'bill' | 'income' | 'task' | 'event';
+export interface PlanItem {
+  id: string;
+  date: string; // first (or only) occurrence
+  title: string;
+  kind: PlanKind;
+  amount: number; // naira, 0 when none
+  repeat: 'none' | 'monthly';
+  doneOn: string[]; // occurrence dates marked done
+}
+
 export interface AppData {
   version: 1;
   sample: boolean;
@@ -160,6 +171,11 @@ export interface AppData {
   career: CareerData;
   rewards: RewardsData;
   advisor: AdvisorData;
+  plans: PlanItem[];
+  /** Ids of things the user deleted, so a merge from another device does not bring them back. */
+  gone: string[];
+  /** When the user last changed anything on this device; the newer device wins a merge conflict. */
+  modified?: string;
   days: Record<string, DayLog>;
   sessions: Record<string, Session>; // key: `${date}|${day}`
   body: BodyEntry[]; // ascending by date
@@ -175,6 +191,8 @@ export const emptyData = (): AppData => ({
   career: emptyCareer(),
   rewards: emptyRewards(),
   advisor: emptyAdvisor(),
+  plans: [],
+  gone: [],
   days: {},
   sessions: {},
   body: [],
