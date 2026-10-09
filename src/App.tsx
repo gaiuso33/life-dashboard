@@ -7,6 +7,7 @@ import { Month } from './components/Month';
 import { Money } from './components/Money';
 import { Settings } from './components/Settings';
 import { Sync } from './components/Sync';
+import { Welcome } from './components/Welcome';
 import { Rewards } from './components/Rewards';
 import { Today } from './components/Today';
 import { Train } from './components/Train';
@@ -46,6 +47,7 @@ export function App() {
   }, [data, ready, dispatch]);
 
   if (!ready) return <div className="boot" aria-busy="true" />;
+  if (!data.onboarded) return <Welcome />;
 
   const go = (t: Tab, v?: TrainView) => {
     if (v) setView(v);

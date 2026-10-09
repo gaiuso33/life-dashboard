@@ -178,6 +178,8 @@ export interface AppData {
   program?: DayDef[]; // the person's own training programme; the built-in one when absent
   /** Ids of things the user deleted, so a merge from another device does not bring them back. */
   gone: string[];
+  /** False until the first-run setup is finished or skipped. Saves from before the setup existed count as done. */
+  onboarded: boolean;
   /** When the user last changed anything on this device; the newer device wins a merge conflict. */
   modified?: string;
   days: Record<string, DayLog>;
@@ -197,6 +199,7 @@ export const emptyData = (): AppData => ({
   advisor: emptyAdvisor(),
   plans: [],
   gone: [],
+  onboarded: false,
   days: {},
   sessions: {},
   body: [],

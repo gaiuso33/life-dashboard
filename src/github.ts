@@ -24,7 +24,7 @@ interface SearchItem {
   repository?: { full_name?: string };
 }
 
-const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
+export const USERNAME = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
 export function cleanUsername(input: string): string {
   return input.trim().replace(/^@/, '').replace(/^https?:\/\/github\.com\//i, '').replace(/[/?#].*$/, '');

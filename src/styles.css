@@ -492,3 +492,25 @@ select:hover { border-color: var(--steel-3); }
 .inline-add .field { flex: 1 1 180px; }
 .inline-add .field.mini { flex: 0 1 120px; }
 .inline-add .btn { min-height: 40px; }
+
+/* ---------- welcome ---------- */
+.welcome { min-height: 100vh; display: grid; place-items: center; padding: 20px 16px; }
+.welcome-card { width: min(620px, 100%); padding: 28px; display: grid; gap: 14px; }
+.welcome-card h1 { font-family: var(--display); font-weight: 700; font-size: clamp(32px, 6vw, 46px); line-height: 1.05; }
+.welcome-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--muted); }
+.welcome-actions { display: grid; gap: 10px; justify-items: start; margin-top: 6px; }
+.welcome-actions .btn { min-height: 46px; }
+.welcome-nav { justify-content: space-between; margin-top: 8px; }
+.progress { height: 6px; background: var(--steel-3); border-radius: 999px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--plate-green); transition: width .2s; }
+.grid2 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.grid3 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.field small.err { margin-top: 2px; }
+.segment.two { grid-template-columns: repeat(2, 1fr); }
+.welcome-card { min-width: 0; overflow-wrap: anywhere; }
+.welcome-card > * { min-width: 0; }
+.welcome-actions { justify-items: stretch; }
+.welcome-actions .btn { width: 100%; justify-content: center; text-align: center; white-space: normal; }
+.welcome-actions .btn.ghost { min-height: 40px; }
+.welcome-brand .brand-mark { flex: none; }
+@media (max-width: 520px) { .welcome-card { padding: 20px; } }

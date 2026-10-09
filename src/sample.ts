@@ -123,7 +123,7 @@ export function buildSampleData(): AppData {
 
   const rewards = emptyRewards();
   rewards.claims.push({ id: 'sample-claim', tier: 'week', period: addDays(mondayOf(today), -14), itemId: 'i-rest', name: 'Rest or gaming hour', cost: 0, date: addDays(mondayOf(today), -8), logged: false });
-  return { version: 1, sample: true, money: buildSampleMoney(rand, start, today), career: buildSampleCareer(rand, start, today), rewards, advisor: emptyAdvisor(), plans: samplePlans(today), gone: [], days, sessions, body, goalWeight: null };
+  return { version: 1, sample: true, money: buildSampleMoney(rand, start, today), career: buildSampleCareer(rand, start, today), rewards, advisor: emptyAdvisor(), plans: samplePlans(today), gone: [], onboarded: true, days, sessions, body, goalWeight: null };
 }
 
 export const exerciseCount = PROGRAM.reduce((n, d) => n + d.exercises.length, 0);

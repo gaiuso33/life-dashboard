@@ -6,7 +6,8 @@ import { stampChanges } from './scalars';
 import { categoriesOf } from './money';
 import { LocalRepository } from './repository';
 import type { Repository } from './repository';
-import { buildSampleData } from './sample';
+import { buildSetup } from './setup';
+import type { SetupAnswers } from './setup';
 import { emptyData, sessionKey } from './types';
 import type { AdvisorSettings, PlanItem, AiReview, AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
 
@@ -39,6 +40,7 @@ type Action =
   | { t: 'plan-add'; item: PlanItem }
   | { t: 'plan-del'; id: string }
   | { t: 'plan-toggle'; id: string; date: string }
+  | { t: 'setup'; answers: SetupAnswers }
   | { t: 'fresh' };
 
 function blankSession(date: string, day: DayKey): Session {
@@ -172,6 +174,8 @@ function apply(state: AppData, a: Action): AppData {
       return { ...withGone(state, a.id), plans: state.plans.filter((p) => p.id !== a.id) };
     case 'plan-toggle':
       return { ...state, plans: state.plans.map((p) => (p.id !== a.id ? p : { ...p, doneOn: p.doneOn.includes(a.date) ? p.doneOn.filter((d) => d !== a.date) : [...p.doneOn, a.date] })) };
+    case 'setup':
+      return buildSetup(state, a.answers);
     case 'fresh':
       return emptyData();
   }
@@ -197,7 +201,7 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
     let cancelled = false;
     repository.current.load().then((saved) => {
       if (cancelled) return;
-      dispatch({ t: 'load', data: saved ?? buildSampleData() });
+      dispatch({ t: 'load', data: saved ?? emptyData() });
       loaded.current = true;
       setReady();
     });

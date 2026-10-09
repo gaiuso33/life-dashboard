@@ -39,6 +39,7 @@ export function normalize(parsed: AppData): AppData {
     advisor: parsed.advisor ?? emptyAdvisor(),
     plans: Array.isArray(parsed.plans) ? parsed.plans : [],
     gone: Array.isArray(parsed.gone) ? parsed.gone : [],
+    onboarded: parsed.onboarded ?? true,
   };
 }
 
