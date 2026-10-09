@@ -5,7 +5,7 @@ import { LocalRepository } from './repository';
 import type { Repository } from './repository';
 import { buildSampleData } from './sample';
 import { emptyData, sessionKey } from './types';
-import type { AppData, BodyEntry, DayLog, Session } from './types';
+import type { AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
 
 type Action =
   | { t: 'load'; data: AppData }
@@ -16,6 +16,16 @@ type Action =
   | { t: 'finish'; date: string; day: DayKey; finished: boolean }
   | { t: 'body'; entry: BodyEntry }
   | { t: 'goal'; value: number | null }
+  | { t: 'txn-add'; txn: Txn }
+  | { t: 'txn-del'; id: string }
+  | { t: 'txn-cat'; id: string; category: string }
+  | { t: 'money-set'; patch: Partial<MoneyData> }
+  | { t: 'career-set'; patch: Partial<CareerData> }
+  | { t: 'claim-add'; claim: Claim }
+  | { t: 'claim-del'; id: string }
+  | { t: 'item-add'; item: RewardItem }
+  | { t: 'item-del'; id: string }
+  | { t: 'badges-earn'; earned: Record<string, string> }
   | { t: 'fresh' };
 
 function blankSession(date: string, day: DayKey): Session {
@@ -58,6 +68,34 @@ function reducer(state: AppData, a: Action): AppData {
     }
     case 'goal':
       return { ...state, goalWeight: a.value };
+    case 'txn-add':
+      return { ...state, money: { ...state.money, txns: [...state.money.txns, a.txn] } };
+    case 'txn-del':
+      return { ...state, money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== a.id) } };
+    case 'txn-cat':
+      return { ...state, money: { ...state.money, txns: state.money.txns.map((t) => (t.id === a.id ? { ...t, category: a.category } : t)) } };
+    case 'money-set':
+      return { ...state, money: { ...state.money, ...a.patch } };
+    case 'career-set':
+      return { ...state, career: { ...state.career, ...a.patch } };
+    case 'claim-add': {
+      const c = a.claim;
+      // A paid treat is also logged as a Rewards expense so Money stays honest. The txn id is derived from the claim id so undo can find it.
+      const txns = c.logged && c.cost > 0 ? [...state.money.txns, { id: `rw-${c.id}`, date: c.date, kind: 'expense' as const, amount: c.cost, category: 'Rewards', note: c.name }] : state.money.txns;
+      return { ...state, money: { ...state.money, txns }, rewards: { ...state.rewards, claims: [...state.rewards.claims, c] } };
+    }
+    case 'claim-del':
+      return {
+        ...state,
+        money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== `rw-${a.id}`) },
+        rewards: { ...state.rewards, claims: state.rewards.claims.filter((c) => c.id !== a.id) },
+      };
+    case 'item-add':
+      return { ...state, rewards: { ...state.rewards, items: [...state.rewards.items, a.item] } };
+    case 'item-del':
+      return { ...state, rewards: { ...state.rewards, items: state.rewards.items.filter((i) => i.id !== a.id) } };
+    case 'badges-earn':
+      return { ...state, rewards: { ...state.rewards, badges: { ...a.earned, ...state.rewards.badges } } };
     case 'fresh':
       return emptyData();
   }
@@ -92,11 +130,31 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
     };
   }, []);
 
+  const latest = useRef(data);
+  latest.current = data;
+
   useEffect(() => {
     if (!loaded.current) return;
     const id = window.setTimeout(() => void repository.current.save(data), 250);
     return () => window.clearTimeout(id);
   }, [data]);
+
+  // Save immediately when the page is hidden or closed, so a change made in the
+  // last moments before leaving is never lost to the debounce above.
+  useEffect(() => {
+    const flush = () => {
+      if (loaded.current) void repository.current.save(latest.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   const value = useMemo<Ctx>(
     () => ({

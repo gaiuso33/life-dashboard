@@ -1,12 +1,16 @@
 import { Barbell } from '../Barbell';
-import { ITEMS, dayScore, dayStatus, dayStreak, nextSession, plannedFor, sessionProgress, sessionsInWeek, strongDaysInWeek, weekStreak } from '../derive';
+import { ITEMS, dayScore, dayStatus, dayStreak, nextSession, plannedFor, sessionProgress, sessionsInWeek, weekStreak } from '../derive';
 import type { ItemKey } from '../derive';
 import type { Tab, TrainView } from '../nav';
 import { dayDef } from '../program';
 import { useStore } from '../store';
 import type { DayLog } from '../types';
 import { WEEKDAYS } from '../dates';
-import { addDays, fmtLong, mondayOf, todayKey, weekdayName } from '../utils';
+import { commitsOn } from '../career';
+import { CATALOG } from '../badges';
+import { naira, txnsOn } from '../money';
+import { periodsFor } from '../rewards';
+import { addDays, fmtLong, fmtShort, mondayOf, todayKey, weekdayName } from '../utils';
 
 const colorOf = (k: ItemKey) => ITEMS.find((i) => i.key === k)!.color;
 
@@ -35,9 +39,14 @@ export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
   const prog = planned ? sessionProgress(session, planned) : null;
   const monday = mondayOf(today);
   const sessionsThisWeek = sessionsInWeek(data, monday);
-  const strongDays = strongDaysInWeek(data, monday, today);
   const patch = (p: Partial<DayLog>) => dispatch({ t: 'day', date: today, patch: p });
 
+  const spentToday = txnsOn(data, today).filter((t) => t.kind === 'expense');
+  const spentTotal = spentToday.reduce((n, t) => n + t.amount, 0);
+  const wk = periodsFor(data, 'week', today);
+  const latestBadge = Object.entries(data.rewards.badges).sort((a, b) => b[1].localeCompare(a[1]))[0];
+  const latestDef = latestBadge ? CATALOG.find((b) => b.id === latestBadge[0]) : undefined;
+  const commitsToday = commitsOn(data.career, today);
   const streak = dayStreak(data, today);
   const wStreak = weekStreak(data, today);
 
@@ -105,14 +114,34 @@ export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
                 </button>
               </Row>
             )}
-            <Row k="code" title="Build a project" detail="Commit, ship or study something for your portfolio." done={!!log.code}>
-              <button className="btn" aria-pressed={!!log.code} onClick={() => patch({ code: !log.code })}>
-                {log.code ? 'Done' : 'Mark done'}
+            <Row
+              k="code"
+              title="Build a project"
+              detail={commitsToday > 0 ? `${commitsToday} ${commitsToday === 1 ? 'commit' : 'commits'} from GitHub today.` : 'Commit, ship or study something for your portfolio.'}
+              done={status.code}
+            >
+              {commitsToday === 0 && (
+                <button className="btn" aria-pressed={!!log.code} onClick={() => patch({ code: !log.code })}>
+                  {log.code ? 'Done' : 'Mark done'}
+                </button>
+              )}
+              <button className="btn ghost" onClick={() => go('career')}>
+                Career
               </button>
             </Row>
-            <Row k="money" title="Log today’s spending" detail="Even a rough total counts." done={!!log.money}>
-              <button className="btn" aria-pressed={!!log.money} onClick={() => patch({ money: !log.money })}>
-                {log.money ? 'Done' : 'Mark done'}
+            <Row
+              k="money"
+              title="Log today’s spending"
+              detail={spentToday.length ? `${naira(spentTotal)} across ${spentToday.length} ${spentToday.length === 1 ? 'entry' : 'entries'}.` : log.money ? 'Marked as no spending today.' : 'Even a rough total counts.'}
+              done={status.money}
+            >
+              {!spentToday.length && (
+                <button className="btn ghost" aria-pressed={!!log.money} onClick={() => patch({ money: !log.money })}>
+                  {log.money ? 'Undo' : 'Spent nothing'}
+                </button>
+              )}
+              <button className="btn" onClick={() => go('money')}>
+                {spentToday.length ? 'Add more' : 'Log spending'}
               </button>
             </Row>
             <Row k="checkin" title="Energy check-in" detail={log.energy != null ? `You logged ${log.energy} of 5.` : 'How do you feel today? 1 is drained, 5 is great.'} done={log.energy != null}>
@@ -151,9 +180,32 @@ export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
 
           <section className="panel">
             <h2>Weekly reward</h2>
-            <Meter label="Sessions" value={sessionsThisWeek} max={3} />
-            <Meter label="Strong days" value={strongDays} max={5} />
-            <p className="note">Earn a small treat when both bars fill. A reward only unlocks if that week’s savings transfer is logged too, which arrives with the Money screen.</p>
+            {wk.current.reqs.map((r) => (
+              <Meter key={r.label} label={r.label} value={r.value} max={r.target} />
+            ))}
+            {wk.current.claim ? (
+              <p className="ok">Claimed this week: {wk.current.claim.name}.</p>
+            ) : wk.current.unlocked ? (
+              <p className="ok">Unlocked. Pick this week’s treat.</p>
+            ) : (
+              <p className="note">Earn a small treat when all three bars fill. A reward only unlocks if that week’s savings transfer is logged.</p>
+            )}
+            {wk.previous.unlocked && !wk.previous.claim && <p className="ok">Last week’s treat is still waiting.</p>}
+            <div className="row-action reward-actions">
+              {((wk.current.unlocked && !wk.current.claim) || (wk.previous.unlocked && !wk.previous.claim)) && (
+                <button className="btn primary" onClick={() => go('rewards')}>
+                  Choose a treat
+                </button>
+              )}
+              <button className="btn ghost" onClick={() => go('rewards')}>
+                All rewards and badges
+              </button>
+            </div>
+            {latestDef && latestBadge && (
+              <p className="note">
+                Latest badge: {latestDef.name}, {fmtShort(latestBadge[1])}.
+              </p>
+            )}
           </section>
         </div>
       </div>

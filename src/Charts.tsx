@@ -172,7 +172,23 @@ export interface Bar {
   detail: string;
 }
 
-export function BarChart({ bars, color, unit, label, height = 200 }: { bars: Bar[]; color: string; unit: string; label: string; height?: number }) {
+export function BarChart({
+  bars,
+  color,
+  unit,
+  label,
+  height = 200,
+  fmtValue,
+  fmtTick,
+}: {
+  bars: Bar[];
+  color: string;
+  unit: string;
+  label: string;
+  height?: number;
+  fmtValue?: (n: number) => string;
+  fmtTick?: (n: number) => string;
+}) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const m = { l: 44, r: 8, t: 12, b: 28 };
@@ -192,7 +208,7 @@ export function BarChart({ bars, color, unit, label, height = 200 }: { bars: Bar
           <g key={t}>
             <line x1={m.l} x2={width - m.r} y1={sy(t)} y2={sy(t)} className="grid" />
             <text x={m.l - 8} y={sy(t) + 4} textAnchor="end" className="axis">
-              {t}
+              {fmtTick ? fmtTick(t) : t}
             </text>
           </g>
         ))}
@@ -224,9 +240,7 @@ export function BarChart({ bars, color, unit, label, height = 200 }: { bars: Bar
             top: Math.max(sy(bars[hover].value) - 12, 4),
           }}
         >
-          <b>
-            {bars[hover].value} {unit}
-          </b>
+          <b>{fmtValue ? fmtValue(bars[hover].value) : `${bars[hover].value} ${unit}`}</b>
           <span>{bars[hover].detail}</span>
         </div>
       )}

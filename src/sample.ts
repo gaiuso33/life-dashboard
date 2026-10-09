@@ -1,7 +1,7 @@
 import { DAY_BY_WEEKDAY, PROGRAM, dayDef } from './program';
-import type { AppData, BodyEntry, DayLog, Session } from './types';
-import { sessionKey } from './types';
-import { addDays, clamp, round1, todayKey, weekday } from './utils';
+import type { AppData, BodyEntry, CareerData, DayLog, MoneyData, Session, Txn } from './types';
+import { emptyCareer, emptyMoney, emptyRewards, sessionKey } from './types';
+import { addDays, clamp, mondayOf, round1, todayKey, weekday } from './utils';
 
 // Small deterministic generator so the sample looks the same on every load.
 function rng(seed: number) {
@@ -116,7 +116,90 @@ export function buildSampleData(): AppData {
     });
   }
 
-  return { version: 1, sample: true, days, sessions, body, goalWeight: null };
+  const rewards = emptyRewards();
+  rewards.claims.push({ id: 'sample-claim', tier: 'week', period: addDays(mondayOf(today), -14), itemId: 'i-rest', name: 'Rest or gaming hour', cost: 0, date: addDays(mondayOf(today), -8), logged: false });
+  return { version: 1, sample: true, money: buildSampleMoney(rand, start, today), career: buildSampleCareer(rand, start, today), rewards, days, sessions, body, goalWeight: null };
 }
 
 export const exerciseCount = PROGRAM.reduce((n, d) => n + d.exercises.length, 0);
+
+const SPEND: { category: string; weight: number; lo: number; hi: number; notes: string[] }[] = [
+  { category: 'Food', weight: 45, lo: 500, hi: 1600, notes: ['Lunch', 'Dinner', 'Breakfast', 'Groceries'] },
+  { category: 'Transport', weight: 20, lo: 200, hi: 900, notes: ['Bus', 'Bike ride'] },
+  { category: 'Data and airtime', weight: 10, lo: 500, hi: 1500, notes: ['Data bundle'] },
+  { category: 'Personal care', weight: 6, lo: 500, hi: 1500, notes: ['Haircut', 'Toiletries'] },
+  { category: 'Health and gym', weight: 5, lo: 500, hi: 1500, notes: ['Protein snack'] },
+  { category: 'Giving', weight: 5, lo: 200, hi: 1000, notes: ['Gift'] },
+  { category: 'Entertainment', weight: 5, lo: 500, hi: 1500, notes: ['Movie night'] },
+  { category: 'Other', weight: 4, lo: 200, hi: 1000, notes: [''] },
+];
+
+function buildSampleMoney(rand: () => number, start: string, today: string): MoneyData {
+  const txns: Txn[] = [];
+  let id = 0;
+  const add = (t: Omit<Txn, 'id'>) => txns.push({ ...t, id: `s${id++}` });
+  const totalWeight = SPEND.reduce((n, s) => n + s.weight, 0);
+  let nextIncome = 3;
+  for (let i = 0; i < 56; i++) {
+    const k = addDays(start, i);
+    if (k >= today) break;
+    const entries = rand() < 0.82 ? 1 + Math.floor(rand() * 3) : 0;
+    for (let n = 0; n < entries; n++) {
+      let r = rand() * totalWeight;
+      const pick = SPEND.find((s) => (r -= s.weight) < 0) ?? SPEND[0];
+      const amount = Math.round(((pick.lo + rand() * (pick.hi - pick.lo)) * 0.6) / 50) * 50;
+      add({ date: k, kind: 'expense', amount, category: pick.category, note: pick.notes[Math.floor(rand() * pick.notes.length)] });
+    }
+    if (i === nextIncome) {
+      const income = Math.round((12000 + rand() * 10000) / 500) * 500;
+      add({ date: k, kind: 'income', amount: income, note: 'Project payment' });
+      if (rand() < 0.85) add({ date: k, kind: 'saving', amount: Math.round(income * 0.2), fund: 'survival', note: 'To survival fund' });
+      nextIncome += 9 + Math.floor(rand() * 7);
+    }
+    if (i % 16 === 11) add({ date: k, kind: 'expense', amount: 7000, category: 'Rewards', note: 'Parfait' });
+  }
+  return { ...emptyMoney(), txns, survivalOpening: 0 };
+}
+
+function buildSampleCareer(rand: () => number, start: string, today: string): CareerData {
+  const commits: Record<string, number> = {};
+  for (let i = 0; i < 56; i++) {
+    const k = addDays(start, i);
+    if (k >= today) break;
+    if (rand() < 0.62) commits[k] = 1 + Math.floor(rand() * rand() * 9);
+  }
+  let n = 0;
+  const id = () => `c${n++}`;
+  const ms = (items: [string, boolean][]) => items.map(([text, done]) => ({ id: id(), text, done }));
+  return {
+    ...emptyCareer(),
+    startDate: start,
+    deadline: addDays(today, 365),
+    lastSync: today,
+    commits,
+    projects: [
+      {
+        id: id(),
+        name: 'Budget tracker API',
+        repo: '',
+        concept: 'REST APIs and databases',
+        status: 'shipped',
+        shippedOn: addDays(today, -21),
+        milestones: ms([['Design the data model', true], ['Build the endpoints', true], ['Write the README', true]]),
+      },
+      {
+        id: id(),
+        name: 'Study planner',
+        repo: '',
+        concept: 'Data structures and state',
+        status: 'building',
+        milestones: ms([['Plan the screens', true], ['Task list with priorities', true], ['Calendar view', false], ['Deploy it', false]]),
+      },
+    ],
+    learning: [
+      { id: id(), date: addDays(today, -3), course: 'Data Structures', note: 'Finished the week on hash tables' },
+      { id: id(), date: addDays(today, -10), course: 'Data Structures', note: 'Linked lists and stacks' },
+      { id: id(), date: addDays(today, -24), course: 'Databases', note: 'Joins and indexes' },
+    ],
+  };
+}

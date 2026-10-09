@@ -26,8 +26,8 @@ export function dayStatus(data: AppData, date: string): DayStatus {
   const log = data.days[date] ?? {};
   return {
     training: !!finishedSessionOn(data, date) || !!log.mobility,
-    code: !!log.code,
-    money: !!log.money,
+    code: !!log.code || (data.career.commits[date] ?? 0) > 0,
+    money: !!log.money || data.money.txns.some((t) => t.date === date && t.kind === 'expense'),
     checkin: log.energy != null,
   };
 }
