@@ -68,3 +68,13 @@ export function parseImport(text: string): ParsedImport {
 
 export const daysAgo = (iso: string | null | undefined): number | null => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : null);
 export const agoText = (n: number | null) => (n == null ? 'never' : n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`);
+
+/** Saves any text as a file download. Used for data the app can't open itself. */
+export function downloadText(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}

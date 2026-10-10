@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.9)
+# Personal Life Dashboard — Product Spec (v0.10)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -135,3 +135,13 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - "Start fresh" from sample data and "Erase everything" in Settings lead back to the welcome screen. Anyone with data saved before this existed skips it (`onboarded` defaults to true for older saves).
 - Setup values are stamped like any other setting, so they take part in device merges correctly.
 - Not yet: the Claude API key and the OPay statement import are not part of setup.
+
+## 13. Hardening (built)
+- **Damaged data**: every load passes through `sanitize.ts`, which drops invalid records instead of crashing. If the saved file cannot be parsed at all, a recovery screen offers: download the unreadable data, restore the automatic daily backup, import an earlier export, or start empty. The unreadable copy is never overwritten.
+- **Storage problems**: a warning banner appears if the browser refuses to save (storage full or blocked), with a one-tap download of a copy. It clears once saving works again.
+- **Several tabs**: changes from another tab are merged in via the storage event.
+- **Crashes**: an error boundary around each screen keeps the rest of the app usable; an app-level boundary offers Download my data and Restore the last backup.
+- **Accessibility**: automated axe-core audit (WCAG 2 A/AA) is clean on every screen at desktop width. Not yet checked with a real screen reader.
+- **Security headers**: `vercel.json` sets a CSP (inline scripts are still allowed because the build is a single inlined file), nosniff, no-referrer and a restrictive Permissions-Policy.
+- **Tests**: `npm test` runs 41 unit tests (merge, plan, advisor, setup, resilience incl. a seeded corruption fuzz). GitHub Actions runs typecheck, tests and build on every push.
+- **Not done**: accounts and cloud sync, real-device testing, live AI API check.

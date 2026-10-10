@@ -6,6 +6,8 @@ import { Career } from './components/Career';
 import { Month } from './components/Month';
 import { Money } from './components/Money';
 import { Settings } from './components/Settings';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { Recovery } from './components/Recovery';
 import { Sync } from './components/Sync';
 import { Welcome } from './components/Welcome';
 import { Rewards } from './components/Rewards';
@@ -34,7 +36,7 @@ function initialTrainView(): TrainView {
 }
 
 export function App() {
-  const { data, ready, dispatch } = useStore();
+  const { data, ready, dispatch, saveFailed, recovery } = useStore();
   const [syncOpen, setSyncOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('today');
   const [view, setView] = useState<TrainView>(initialTrainView);
@@ -47,6 +49,7 @@ export function App() {
   }, [data, ready, dispatch]);
 
   if (!ready) return <div className="boot" aria-busy="true" />;
+  if (recovery) return <Recovery />;
   if (!data.onboarded) return <Welcome />;
 
   const go = (t: Tab, v?: TrainView) => {
@@ -83,6 +86,14 @@ export function App() {
       </aside>
 
       <main className="main">
+        {saveFailed && (
+          <div className="banner warn" role="alert">
+            <p>Your latest changes couldn’t be saved on this device. Storage may be full, or the browser may be blocking it (private windows do this). Download a copy so nothing is lost.</p>
+            <button className="btn" onClick={() => setSyncOpen(true)}>
+              Download a copy
+            </button>
+          </div>
+        )}
         <div className="topbar">
           {!data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
           <button className="link-btn" onClick={() => go('settings')}>
@@ -105,15 +116,17 @@ export function App() {
             </button>
           </div>
         )}
-        {tab === 'today' && <Today go={go} />}
-        {tab === 'month' && <Month />}
-        {tab === 'train' && <Train view={view} setView={setView} />}
-        {tab === 'money' && <Money />}
-        {tab === 'career' && <Career />}
-        {tab === 'rewards' && <Rewards />}
-        {tab === 'advisor' && <Advisor go={go} />}
-        {tab === 'body' && <Body />}
-        {tab === 'settings' && <Settings go={go} onSync={() => setSyncOpen(true)} />}
+        <ErrorBoundary inline key={tab}>
+          {tab === 'today' && <Today go={go} />}
+          {tab === 'month' && <Month />}
+          {tab === 'train' && <Train view={view} setView={setView} />}
+          {tab === 'money' && <Money />}
+          {tab === 'career' && <Career />}
+          {tab === 'rewards' && <Rewards />}
+          {tab === 'advisor' && <Advisor go={go} />}
+          {tab === 'body' && <Body />}
+          {tab === 'settings' && <Settings go={go} onSync={() => setSyncOpen(true)} />}
+        </ErrorBoundary>
       </main>
       {syncOpen && <Sync onClose={() => setSyncOpen(false)} />}
     </div>

@@ -7,7 +7,7 @@
   --line: #2a3447;
   --chalk: #eef1f6;
   --muted: #9aa5b9;
-  --faint: #6b768b;
+  --faint: #8d98ad;
   --plate-red: #e66767;
   --plate-blue: #3987e5;
   --plate-yellow: #d9a21b;
@@ -127,7 +127,7 @@ ul, ol { list-style: none; }
 .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .week li { display: grid; justify-items: center; gap: 8px; padding: 10px 0; border-radius: 8px; border: 1px solid transparent; }
 .week li.is-today { border-color: var(--steel-3); background: var(--steel-2); }
-.week li.is-future { opacity: .45; }
+.week li.is-future { opacity: .8; }
 .wd { font-size: 13px; color: var(--muted); }
 .dots { display: grid; grid-template-columns: repeat(2, 8px); gap: 4px; }
 .dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--faint); }
@@ -408,7 +408,7 @@ select:hover { border-color: var(--steel-3); }
 .cal-h { color: var(--muted); font-size: 12px; text-align: center; padding: 2px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
 .cal-d { display: grid; align-content: start; gap: 3px; min-height: 92px; padding: 6px; text-align: left; background: var(--steel-2); border: 1px solid var(--steel-3); border-radius: 8px; overflow: hidden; }
 .cal-d:hover { border-color: var(--muted); }
-.cal-d.out { opacity: .4; }
+.cal-d.out { opacity: .9; }
 .cal-d.is-today .n { background: var(--chalk); color: var(--ink); border-radius: 999px; padding: 0 6px; justify-self: start; }
 .cal-d.is-sel { outline: 2px solid var(--chalk); outline-offset: -2px; }
 .cal-d .n { font-weight: 600; font-size: 14px; }
@@ -514,3 +514,8 @@ select:hover { border-color: var(--steel-3); }
 .welcome-actions .btn.ghost { min-height: 40px; }
 .welcome-brand .brand-mark { flex: none; }
 @media (max-width: 520px) { .welcome-card { padding: 20px; } }
+
+/* ---------- resilience ---------- */
+.banner.warn { border-color: var(--plate-yellow); color: var(--chalk); }
+.crash { width: min(620px, 100%); display: grid; gap: 14px; }
+.crash h1 { font-family: var(--display); font-size: clamp(28px, 5vw, 40px); line-height: 1.05; }
