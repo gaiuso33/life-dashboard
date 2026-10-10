@@ -1,4 +1,4 @@
-import { DAY_BY_WEEKDAY, dayDef } from './program';
+import { dayDef, dayForWeekday } from './program';
 import type { DayKey, ExerciseDef } from './program';
 import type { AppData, BodyEntry, Session } from './types';
 import { addDays, dayNumber, mondayOf, weekday } from './utils';
@@ -91,7 +91,7 @@ export function readyForMoreLoad(ex: ExerciseDef, last: Session | undefined): bo
 }
 
 export function plannedFor(date: string): DayKey | null {
-  return DAY_BY_WEEKDAY[weekday(date)] ?? null;
+  return dayForWeekday(weekday(date));
 }
 
 export function nextSession(from: string): { date: string; day: DayKey } {

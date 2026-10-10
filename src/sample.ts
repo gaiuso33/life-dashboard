@@ -1,4 +1,9 @@
-import { DAY_BY_WEEKDAY, PROGRAM, dayDef } from './program';
+import { DEFAULT_PROGRAM } from './program';
+import type { DayKey } from './program';
+
+const DAY_BY_WEEKDAY: Record<number, DayKey> = { 1: 'push', 3: 'pull', 5: 'legs' };
+const dayDef = (k: DayKey) => DEFAULT_PROGRAM.find((d) => d.key === k)!;
+const PROGRAM = DEFAULT_PROGRAM;
 import type { AppData, BodyEntry, CareerData, DayLog, MoneyData, Session, Txn, PlanItem } from './types';
 import { emptyAdvisor, emptyCareer, emptyMoney, emptyRewards, sessionKey } from './types';
 import { addDays, clamp, mondayOf, round1, todayKey, weekday } from './utils';

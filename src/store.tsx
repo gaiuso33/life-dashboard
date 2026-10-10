@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { ReactNode } from 'react';
-import type { DayKey } from './program';
+import type { DayDef, DayKey } from './program';
+import { setActiveProgram } from './program';
+import { stampChanges } from './scalars';
+import { categoriesOf } from './money';
 import { LocalRepository } from './repository';
 import type { Repository } from './repository';
 import { buildSampleData } from './sample';
@@ -28,6 +31,11 @@ type Action =
   | { t: 'badges-earn'; earned: Record<string, string> }
   | { t: 'advisor-set'; settings: AdvisorSettings }
   | { t: 'review-save'; review: AiReview }
+  | { t: 'program-set'; program?: DayDef[] }
+  | { t: 'cat-add'; name: string }
+  | { t: 'cat-rename'; from: string; to: string }
+  | { t: 'cat-del'; name: string }
+  | { t: 'item-edit'; item: RewardItem }
   | { t: 'plan-add'; item: PlanItem }
   | { t: 'plan-del'; id: string }
   | { t: 'plan-toggle'; id: string; date: string }
@@ -49,7 +57,9 @@ const withGone = (s: AppData, ...ids: string[]): AppData => ({ ...s, gone: [...n
 function reducer(state: AppData, a: Action): AppData {
   const next = apply(state, a);
   if (a.t === 'load' || a.t === 'badges-earn' || next === state) return next;
-  return { ...next, modified: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const stamped = a.t === 'fresh' ? next : stampChanges(state, next, now);
+  return { ...stamped, modified: now };
 }
 
 function apply(state: AppData, a: Action): AppData {
@@ -122,6 +132,40 @@ function apply(state: AppData, a: Action): AppData {
       const reviews = [...rest, a.review].sort((x, y) => y.week.localeCompare(x.week)).slice(0, 12);
       return { ...state, advisor: { ...state.advisor, reviews } };
     }
+    case 'program-set':
+      return { ...state, program: a.program };
+    case 'cat-add': {
+      const cats = categoriesOf(state);
+      if (cats.some((c) => c.toLowerCase() === a.name.toLowerCase())) return state;
+      // New categories go before "Rewards" and "Other", which stay at the end.
+      const tail: string[] = cats.filter((c) => c === 'Rewards' || c === 'Other');
+      return { ...state, money: { ...state.money, categories: [...cats.filter((c) => !tail.includes(c)), a.name, ...tail] } };
+    }
+    case 'cat-rename': {
+      const cats = categoriesOf(state);
+      if (a.from === 'Rewards' || a.from === 'Other' || !cats.includes(a.from) || cats.some((c) => c.toLowerCase() === a.to.toLowerCase() && c !== a.from)) return state;
+      return {
+        ...state,
+        money: {
+          ...state.money,
+          categories: cats.map((c) => (c === a.from ? a.to : c)),
+          txns: state.money.txns.map((t) => (t.category === a.from ? { ...t, category: a.to } : t)),
+        },
+      };
+    }
+    case 'cat-del': {
+      if (a.name === 'Rewards' || a.name === 'Other') return state;
+      return {
+        ...state,
+        money: {
+          ...state.money,
+          categories: categoriesOf(state).filter((c) => c !== a.name),
+          txns: state.money.txns.map((t) => (t.category === a.name ? { ...t, category: 'Other' } : t)),
+        },
+      };
+    }
+    case 'item-edit':
+      return { ...state, rewards: { ...state.rewards, items: state.rewards.items.map((i) => (i.id === a.item.id ? a.item : i)) } };
     case 'plan-add':
       return { ...state, plans: [...state.plans, a.item] };
     case 'plan-del':
@@ -161,6 +205,9 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
       cancelled = true;
     };
   }, []);
+
+  // The programme is read through plain functions all over the app, so it is set from the data before anything renders.
+  setActiveProgram(data.program);
 
   const latest = useRef(data);
   latest.current = data;

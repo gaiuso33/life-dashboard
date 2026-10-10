@@ -3,7 +3,7 @@ import { commitStats, loggedSpendDays, plural, readyExercises, repsInWeek, sumTx
 import { commitStreak } from './career';
 import { weekStreak, weeklyRepTotals, weightTrend, suggestedPace } from './derive';
 import { forecasts } from './forecast';
-import { avgMonthlySpend, fundBalance, monthTotals, monthlySavingPace, survivalTarget } from './money';
+import { CATEGORIES, avgMonthlySpend, fundBalance, monthTotals, monthlySavingPace, survivalTarget } from './money';
 import { MEASURES } from './program';
 import { plansBetween } from './plan';
 import { periodsFor } from './rewards';
@@ -89,7 +89,7 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
       spentThisMonth: month.spent,
       receivedThisMonth: month.income,
       savedThisMonth: month.saved,
-      spendingByCategoryThisMonth: month.byCategory,
+      spendingByCategoryThisMonth: builtInCategories(month.byCategory),
       averageMonthlySpendingLast90Days: avgMonthlySpend(data, today) != null ? Math.round(avgMonthlySpend(data, today)!) : null,
       survivalFund: { balance: fundBalance(data, 'survival'), targetSixMonths: target.target, targetBasedOn: target.basis },
       savingPacePerMonth: Math.round(monthlySavingPace(data, today)),
@@ -129,6 +129,16 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
       weeklyReward: { requirements: wk.reqs.map((q) => `${q.label} ${q.value}/${q.target}`), unlocked: wk.unlocked, claimed: !!wk.claim },
       treatsSpentThisMonthNaira: data.rewards.claims.filter((c) => c.date.startsWith(today.slice(0, 7))).reduce((n, c) => n + c.cost, 0),
     };
+  }
+  return out;
+}
+
+/** Category names you typed yourself are free text, so they are folded into one total instead of being sent. */
+function builtInCategories(by: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [name, n] of Object.entries(by)) {
+    const key = (CATEGORIES as readonly string[]).includes(name) ? name : 'Custom categories';
+    out[key] = (out[key] ?? 0) + n;
   }
   return out;
 }

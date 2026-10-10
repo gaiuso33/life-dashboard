@@ -5,6 +5,7 @@ import { Body } from './components/Body';
 import { Career } from './components/Career';
 import { Month } from './components/Month';
 import { Money } from './components/Money';
+import { Settings } from './components/Settings';
 import { Sync } from './components/Sync';
 import { Rewards } from './components/Rewards';
 import { Today } from './components/Today';
@@ -70,6 +71,9 @@ export function App() {
           ))}
         </nav>
         <div className="rail-foot">
+          <button className="link-btn" onClick={() => go('settings')}>
+            Settings
+          </button>
           <button className="link-btn" onClick={() => setSyncOpen(true)}>
             Sync and backup
           </button>
@@ -79,6 +83,9 @@ export function App() {
       <main className="main">
         <div className="topbar">
           {!data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
+          <button className="link-btn" onClick={() => go('settings')}>
+            Settings
+          </button>
           <button className="link-btn" onClick={() => setSyncOpen(true)}>
             Sync and backup
           </button>
@@ -104,6 +111,7 @@ export function App() {
         {tab === 'rewards' && <Rewards />}
         {tab === 'advisor' && <Advisor go={go} />}
         {tab === 'body' && <Body />}
+        {tab === 'settings' && <Settings go={go} onSync={() => setSyncOpen(true)} />}
       </main>
       {syncOpen && <Sync onClose={() => setSyncOpen(false)} />}
     </div>
