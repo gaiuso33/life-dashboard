@@ -519,3 +519,11 @@ select:hover { border-color: var(--steel-3); }
 .banner.warn { border-color: var(--plate-yellow); color: var(--chalk); }
 .crash { width: min(620px, 100%); display: grid; gap: 14px; }
 .crash h1 { font-family: var(--display); font-size: clamp(28px, 5vw, 40px); line-height: 1.05; }
+
+/* Cloud account */
+.account-form { display: grid; gap: 10px; margin-top: 8px; min-width: 0; }
+.segment.two { grid-template-columns: repeat(2, 1fr); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--muted); }
+.check input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--plate-green); }
+.modal h4 { margin: 16px 0 4px; font-size: 15px; }
+.cloud-badge { margin-right: auto; }

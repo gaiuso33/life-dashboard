@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.10)
+# Personal Life Dashboard — Product Spec (v0.11)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -145,3 +145,20 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - **Security headers**: `vercel.json` sets a CSP (inline scripts are still allowed because the build is a single inlined file), nosniff, no-referrer and a restrictive Permissions-Policy.
 - **Tests**: `npm test` runs 41 unit tests (merge, plan, advisor, setup, resilience incl. a seeded corruption fuzz). GitHub Actions runs typecheck, tests and build on every push.
 - **Not done**: accounts and cloud sync, real-device testing, live AI API check.
+
+## 14. Accounts and cloud sync (built, needs a Supabase project)
+**What it does.** Sign in on any device and the dashboard keeps itself in step: edits go up a few seconds after you stop, other devices are checked when you return to the app, go back online, and every minute while it is open. The file export/import still works and is the fallback.
+
+**How it stays private.** Data is encrypted in the browser (PBKDF2 → AES-GCM) with a passphrase that is never sent anywhere. The server stores one opaque row per account. A forgotten passphrase cannot be recovered by anyone; the data on your devices is unaffected. The account password (email login, resettable) and the data passphrase are separate. "Keep this device unlocked" stores a non-extractable key in the browser instead of the passphrase.
+
+**How devices agree.** The cloud copy is a version-numbered row. A device pulls it, merges it with its own data using the same merge as file imports (nothing lost, deletions respected, newest setting wins), and pushes only if that added something. A write is refused if another device wrote first, and the device simply merges again. Sample data is never uploaded.
+
+**Setting it up (once, about ten minutes).**
+1. Create a free project at supabase.com.
+2. In the SQL editor run `supabase/schema.sql` (creates the table and the row-level rules that let each person see only their own row).
+3. Authentication → URL Configuration: set Site URL to your deployed address (password-reset links return there).
+4. Project Settings → API: copy the Project URL and the `anon` public key.
+5. In Vercel → Project → Settings → Environment Variables add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then redeploy. Locally, copy `.env.example` to `.env.local`.
+Without those two values the app works exactly as before and the cloud section says it is switched off.
+
+**Limits to know.** Whole-dashboard sync (one row, up to 20 MB). Email confirmation uses Supabase's built-in mailer, which is rate-limited; use your own SMTP before real users. Deleting an account entirely needs a server-side admin call and is not in the app yet. The session is kept in this browser's storage, as with most web apps; the content security policy limits what scripts can run.

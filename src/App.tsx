@@ -8,6 +8,8 @@ import { Money } from './components/Money';
 import { Settings } from './components/Settings';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Recovery } from './components/Recovery';
+import { CloudBadge } from './components/Account';
+import { useCloud } from './cloud/CloudProvider';
 import { Sync } from './components/Sync';
 import { Welcome } from './components/Welcome';
 import { Rewards } from './components/Rewards';
@@ -37,7 +39,8 @@ function initialTrainView(): TrainView {
 
 export function App() {
   const { data, ready, dispatch, saveFailed, recovery } = useStore();
-  const [syncOpen, setSyncOpen] = useState(false);
+  const cloud = useCloud();
+  const [syncOpen, setSyncOpen] = useState(!!cloud.resetToken);
   const [tab, setTab] = useState<Tab>('today');
   const [view, setView] = useState<TrainView>(initialTrainView);
 
@@ -95,7 +98,8 @@ export function App() {
           </div>
         )}
         <div className="topbar">
-          {!data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
+          <CloudBadge />
+          {!cloud.email && !data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
           <button className="link-btn" onClick={() => go('settings')}>
             Settings
           </button>

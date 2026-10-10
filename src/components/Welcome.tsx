@@ -1,3 +1,5 @@
+import { Account } from './Account';
+import { useCloud } from '../cloud/CloudProvider';
 import { useState } from 'react';
 import { buildSampleData } from '../sample';
 import { defaultAnswers, setupErrors } from '../setup';
@@ -18,6 +20,8 @@ const decimal = (s: string) => s.replace(/[^\d.]/g, '');
 const grouped = (s: string) => (s ? Number(s).toLocaleString('en-NG') : '');
 
 export function Welcome() {
+  const cloud = useCloud();
+  const [showAccount, setShowAccount] = useState(!!cloud.resetToken);
   const { dispatch, importData } = useStore();
   const [step, setStep] = useState(-1); // -1 is the welcome screen
   const [a, setA] = useState<SetupAnswers>(defaultAnswers);
@@ -53,7 +57,7 @@ export function Welcome() {
             Life Dashboard
           </div>
           <h1>Welcome</h1>
-          <p className="sub">Training, money, career and daily habits in one place. Everything stays on this device. Setup takes about two minutes and every answer can be changed later.</p>
+          <p className="sub">Training, money, career and daily habits in one place. Your data stays on this device unless you choose to sync it. Setup takes about two minutes and every answer can be changed later.</p>
           <div className="welcome-actions">
             <button className="btn primary" onClick={() => setStep(0)}>
               Set up my dashboard
@@ -62,10 +66,16 @@ export function Welcome() {
               I already have a copy from another device
               <input type="file" accept="application/json,.json" onChange={(e) => { void pickFile(e.target.files?.[0]); e.target.value = ''; }} />
             </label>
+            {cloud.configured && !showAccount && (
+              <button className="btn" onClick={() => setShowAccount(true)}>
+                Sign in to my account
+              </button>
+            )}
             <button className="btn ghost" onClick={() => importData(buildSampleData())}>
               Look around with sample data first
             </button>
           </div>
+          {showAccount && <Account />}
           {importError && <p className="err" role="alert">{importError}</p>}
         </div>
       </div>
