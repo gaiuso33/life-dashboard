@@ -1,3 +1,4 @@
 *.zip
 /node_modules
-life-data.json
+life-data.json.env.local
+.env*.local

@@ -119,9 +119,9 @@ export function Month() {
 
       <div className="cols month-cols">
         <section className="panel cal-panel">
-          <div className="cal" role="grid" aria-label={monthTitle(ym)}>
+          <div className="cal" role="group" aria-label={monthTitle(ym)}>
             {WEEKDAYS.map((w) => (
-              <div key={w} className="cal-h" role="columnheader">
+              <div key={w} className="cal-h">
                 {w}
               </div>
             ))}
@@ -133,10 +133,9 @@ export function Month() {
               return (
                 <button
                   key={d}
-                  role="gridcell"
                   className={`cal-d${inMonth(d) ? '' : ' out'}${d === today ? ' is-today' : ''}${d === sel ? ' is-sel' : ''}`}
                   aria-label={`${fmtLong(d)}${ps.length ? `, ${ps.length} planned` : ''}`}
-                  aria-selected={d === sel}
+                  aria-pressed={d === sel}
                   onClick={() => pick(d)}
                 >
                   <span className="n">{Number(d.slice(8))}</span>

@@ -143,8 +143,10 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
               {review.stats.map((s) => (
                 <div key={s.label}>
                   <dt>{s.label}</dt>
-                  <dd className={s.value.length > 8 ? 'long' : undefined}>{s.value}</dd>
-                  {s.note && <small className="stat-note">{s.note}</small>}
+                  <dd className={s.value.length > 8 ? 'long' : undefined}>
+                    {s.value}
+                    {s.note && <small className="stat-note">{s.note}</small>}
+                  </dd>
                 </div>
               ))}
             </dl>

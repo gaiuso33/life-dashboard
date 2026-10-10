@@ -3,6 +3,7 @@ import { describeGains, mergeData } from '../merge';
 import { agoText, canShareFile, daysAgo, downloadData, lastExport, parseImport, shareData } from '../sync';
 import { useStore } from '../store';
 import type { AppData } from '../types';
+import { Account } from './Account';
 
 export function Sync({ onClose }: { onClose: () => void }) {
   const { data, importData } = useStore();
@@ -51,9 +52,13 @@ export function Sync({ onClose }: { onClose: () => void }) {
             Close
           </button>
         </div>
-        <p className="note first">Your data lives only on this device. To use the dashboard on your phone and laptop, move a copy between them. Merging combines both and never loses entries.</p>
+        <h3>Cloud sync</h3>
+        <Account />
 
-        <h3>1. Save a copy from this device</h3>
+        <h3>Backup and moving by hand</h3>
+        <p className="note first">Without an account your data lives only on this device. A file copy works anywhere, and merging combines both sides and never loses entries.</p>
+
+        <h4>1. Save a copy from this device</h4>
         <p className="note first">
           Last saved: {agoText(daysAgo(exported))}. {data.sample ? 'This is sample data.' : ''}
         </p>
@@ -74,7 +79,7 @@ export function Sync({ onClose }: { onClose: () => void }) {
         </div>
         <p className="note">Send it to yourself on WhatsApp, Telegram or email, or save it to a cloud drive. It doesn’t include your Claude API key.</p>
 
-        <h3>2. Bring in a copy from another device</h3>
+        <h4>2. Bring in a copy from another device</h4>
         <label className="btn file-btn">
           Choose a .json file
           <input type="file" accept="application/json,.json" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />

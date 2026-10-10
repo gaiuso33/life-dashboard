@@ -1,12 +1,14 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { DayDef, DayKey } from './program';
 import { setActiveProgram } from './program';
 import { stampChanges } from './scalars';
 import { categoriesOf } from './money';
 import { LocalRepository } from './repository';
-import type { Repository } from './repository';
-import { buildSampleData } from './sample';
+import type { LoadResult, Repository } from './repository';
+import { mergeData } from './merge';
+import { buildSetup } from './setup';
+import type { SetupAnswers } from './setup';
 import { emptyData, sessionKey } from './types';
 import type { AdvisorSettings, PlanItem, AiReview, AppData, BodyEntry, CareerData, Claim, DayLog, MoneyData, RewardItem, Session, Txn } from './types';
 
@@ -39,6 +41,7 @@ type Action =
   | { t: 'plan-add'; item: PlanItem }
   | { t: 'plan-del'; id: string }
   | { t: 'plan-toggle'; id: string; date: string }
+  | { t: 'setup'; answers: SetupAnswers }
   | { t: 'fresh' };
 
 function blankSession(date: string, day: DayKey): Session {
@@ -172,14 +175,26 @@ function apply(state: AppData, a: Action): AppData {
       return { ...withGone(state, a.id), plans: state.plans.filter((p) => p.id !== a.id) };
     case 'plan-toggle':
       return { ...state, plans: state.plans.map((p) => (p.id !== a.id ? p : { ...p, doneOn: p.doneOn.includes(a.date) ? p.doneOn.filter((d) => d !== a.date) : [...p.doneOn, a.date] })) };
+    case 'setup':
+      return buildSetup(state, a.answers);
     case 'fresh':
       return emptyData();
   }
 }
 
+/** Set when something is saved but can't be read: the app waits for the person to choose before saving anything. */
+export interface Recovery {
+  raw: string;
+  backup: { data: AppData; at: string } | null;
+}
+
 interface Ctx {
   data: AppData;
   ready: boolean;
+  /** True when the latest changes could not be written to this device (storage full or blocked). */
+  saveFailed: boolean;
+  recovery: Recovery | null;
+  resolveRecovery: (data: AppData) => void;
   dispatch: (a: Action) => void;
   exportJson: () => string;
   importData: (d: AppData) => void;
@@ -191,14 +206,22 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
   const repository = useRef<Repository>(repo ?? new LocalRepository());
   const [data, dispatch] = useReducer(reducer, undefined, emptyData);
   const [ready, setReady] = useReducer(() => true, false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [recovery, setRecovery] = useState<Recovery | null>(null);
   const loaded = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    repository.current.load().then((saved) => {
+    repository.current.load().then((res: LoadResult) => {
       if (cancelled) return;
-      dispatch({ t: 'load', data: saved ?? buildSampleData() });
-      loaded.current = true;
+      if (res.status === 'damaged') {
+        // Saving stays off until the person decides, so unreadable data is never overwritten.
+        setRecovery({ raw: res.raw, backup: res.backup });
+        dispatch({ t: 'load', data: emptyData() });
+      } else {
+        dispatch({ t: 'load', data: res.status === 'ok' ? res.data : emptyData() });
+        loaded.current = true;
+      }
       setReady();
     });
     return () => {
@@ -212,17 +235,32 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
   const latest = useRef(data);
   latest.current = data;
 
+  const persist = (d: AppData) =>
+    repository.current.save(d).then((r) => {
+      setSaveFailed(!r.ok);
+    });
+
   useEffect(() => {
     if (!loaded.current) return;
-    const id = window.setTimeout(() => void repository.current.save(data), 250);
+    const id = window.setTimeout(() => void persist(data), 250);
     return () => window.clearTimeout(id);
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, recovery]);
+
+  // Another tab of the app saved something newer: fold it in rather than overwrite it with this tab's older copy.
+  useEffect(
+    () =>
+      repository.current.subscribe?.((incoming) => {
+        if ((incoming.modified ?? '') > (latest.current.modified ?? '')) dispatch({ t: 'load', data: mergeData(latest.current, incoming) });
+      }),
+    [],
+  );
 
   // Save immediately when the page is hidden or closed, so a change made in the
   // last moments before leaving is never lost to the debounce above.
   useEffect(() => {
     const flush = () => {
-      if (loaded.current) void repository.current.save(latest.current);
+      if (loaded.current) void persist(latest.current);
     };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush();
@@ -239,11 +277,18 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
     () => ({
       data,
       ready,
+      saveFailed,
+      recovery,
+      resolveRecovery: (d) => {
+        dispatch({ t: 'load', data: d });
+        loaded.current = true;
+        setRecovery(null);
+      },
       dispatch,
       exportJson: () => JSON.stringify(data, null, 2),
       importData: (d) => dispatch({ t: 'load', data: d }),
     }),
-    [data, ready],
+    [data, ready, saveFailed, recovery],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

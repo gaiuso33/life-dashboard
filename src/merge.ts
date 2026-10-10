@@ -87,6 +87,7 @@ export function mergeData(local: AppData, incoming: AppData): AppData {
     version: 1,
     sample: n.sample,
     gone,
+    onboarded: o.onboarded || n.onboarded,
     modified: [o.modified, n.modified].filter(Boolean).sort().pop(),
     days,
     sessions,

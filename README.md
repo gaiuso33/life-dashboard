@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.8)
+# Personal Life Dashboard — Product Spec (v0.11)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -121,10 +121,44 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - Not included in exports: the Claude API key.
 - Installable and offline: the hosted build (dist folder) has a web app manifest, icons and a service worker. It only works when served over https, not from a saved file. Fonts from Google need internet; offline it falls back to system fonts.
 - Limits: sync is manual (export then import); there is no automatic cloud sync. If a project's milestone is deleted on the older device, the newer device's list wins. A copy hosted at a web address has separate storage from the file opened from disk, so move existing data across once with export and import.
-- Next phase: first-run setup.
+- Next phase: hardening for the pitch version.
 
 ## 11. Settings (built)
 - Settings screen (top right on every screen, and in the sidebar on laptop): training programme editor (rename, sets, rep range, reps or seconds, each side, reorder, add or remove exercises, change session name and weekday), spending categories (add, rename with past entries following, remove with entries moved to Other; Rewards and Other are fixed), reward menu (add, edit name, cost and level, remove), goals (goal weight, number of projects, career deadline), and data (sync, erase).
 - A programme is checked before it can be saved (three sessions on different weekdays, each with at least one valid exercise). Logged history is never rewritten: renaming keeps history, removing an exercise hides it.
 - Single-value settings (savings split, daily estimate, opening fund, goal weight, programme, categories, goals, GitHub name, advisor settings) carry their own last-changed time, so a merge keeps the most recent change to each one even from the device that was edited less recently overall. A category used by an entry from either device is always kept.
 - Still on other screens: savings split and daily estimate on Money, advisor options on Advisor.
+
+## 12. First-run setup (built)
+- A brand-new device opens a welcome screen instead of sample data, with three choices: set up the dashboard, import a copy from another device (so a phone can start from the laptop's data), or look around with sample data first.
+- Setup has five short steps: training days (push, pull and legs on three different weekdays), starting weight and goal weight, money (rough daily spending, amount already in the survival fund, share of income to save), career goal (number of projects, deadline, GitHub username) and the reward menu (example menu or empty). Every answer is optional or has a default, is checked before moving on, and can be changed later in Settings.
+- "Start fresh" from sample data and "Erase everything" in Settings lead back to the welcome screen. Anyone with data saved before this existed skips it (`onboarded` defaults to true for older saves).
+- Setup values are stamped like any other setting, so they take part in device merges correctly.
+- Not yet: the Claude API key and the OPay statement import are not part of setup.
+
+## 13. Hardening (built)
+- **Damaged data**: every load passes through `sanitize.ts`, which drops invalid records instead of crashing. If the saved file cannot be parsed at all, a recovery screen offers: download the unreadable data, restore the automatic daily backup, import an earlier export, or start empty. The unreadable copy is never overwritten.
+- **Storage problems**: a warning banner appears if the browser refuses to save (storage full or blocked), with a one-tap download of a copy. It clears once saving works again.
+- **Several tabs**: changes from another tab are merged in via the storage event.
+- **Crashes**: an error boundary around each screen keeps the rest of the app usable; an app-level boundary offers Download my data and Restore the last backup.
+- **Accessibility**: automated axe-core audit (WCAG 2 A/AA) is clean on every screen at desktop width. Not yet checked with a real screen reader.
+- **Security headers**: `vercel.json` sets a CSP (inline scripts are still allowed because the build is a single inlined file), nosniff, no-referrer and a restrictive Permissions-Policy.
+- **Tests**: `npm test` runs 41 unit tests (merge, plan, advisor, setup, resilience incl. a seeded corruption fuzz). GitHub Actions runs typecheck, tests and build on every push.
+- **Not done**: accounts and cloud sync, real-device testing, live AI API check.
+
+## 14. Accounts and cloud sync (built, needs a Supabase project)
+**What it does.** Sign in on any device and the dashboard keeps itself in step: edits go up a few seconds after you stop, other devices are checked when you return to the app, go back online, and every minute while it is open. The file export/import still works and is the fallback.
+
+**How it stays private.** Data is encrypted in the browser (PBKDF2 → AES-GCM) with a passphrase that is never sent anywhere. The server stores one opaque row per account. A forgotten passphrase cannot be recovered by anyone; the data on your devices is unaffected. The account password (email login, resettable) and the data passphrase are separate. "Keep this device unlocked" stores a non-extractable key in the browser instead of the passphrase.
+
+**How devices agree.** The cloud copy is a version-numbered row. A device pulls it, merges it with its own data using the same merge as file imports (nothing lost, deletions respected, newest setting wins), and pushes only if that added something. A write is refused if another device wrote first, and the device simply merges again. Sample data is never uploaded.
+
+**Setting it up (once, about ten minutes).**
+1. Create a free project at supabase.com.
+2. In the SQL editor run `supabase/schema.sql` (creates the table and the row-level rules that let each person see only their own row).
+3. Authentication → URL Configuration: set Site URL to your deployed address (password-reset links return there).
+4. Project Settings → API: copy the Project URL and the `anon` public key.
+5. In Vercel → Project → Settings → Environment Variables add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then redeploy. Locally, copy `.env.example` to `.env.local`.
+Without those two values the app works exactly as before and the cloud section says it is switched off.
+
+**Limits to know.** Whole-dashboard sync (one row, up to 20 MB). Email confirmation uses Supabase's built-in mailer, which is rate-limited; use your own SMTP before real users. Deleting an account entirely needs a server-side admin call and is not in the app yet. The session is kept in this browser's storage, as with most web apps; the content security policy limits what scripts can run.
