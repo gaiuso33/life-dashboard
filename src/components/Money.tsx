@@ -17,6 +17,7 @@ import {
   suggestedSave,
   survivalTarget,
 } from '../money';
+import { ImportStatement } from './ImportStatement';
 import { useStore } from '../store';
 import type { FundKey, TxnKind } from '../types';
 import { addDays, fmtShort, todayKey } from '../utils';
@@ -42,6 +43,7 @@ export function Money() {
   const [date, setDate] = useState(today);
   const [split, setSplit] = useState<{ income: number; amount: number } | null>(null);
   const [flash, setFlash] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const survival = survivalTarget(data, today);
   const survivalNow = fundBalance(data, 'survival');
@@ -196,7 +198,12 @@ export function Money() {
           </section>
 
           <section className="panel">
-            <h2>Recent entries</h2>
+            <div className="panel-top">
+              <h2>Recent entries</h2>
+              <button className="btn" onClick={() => setImporting(true)}>
+                Import a statement
+              </button>
+            </div>
             {recent.length === 0 ? (
               <p className="empty">Nothing logged yet. Your first entry goes in the form above.</p>
             ) : (
@@ -340,6 +347,7 @@ export function Money() {
         </div>
         <p className="note">Your income varies, so the app suggests a percentage of each payment instead of a fixed monthly amount.</p>
       </section>
+      {importing && <ImportStatement onClose={() => setImporting(false)} />}
     </div>
   );
 }

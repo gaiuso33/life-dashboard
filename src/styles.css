@@ -542,3 +542,17 @@ select:hover { border-color: var(--steel-3); }
 .field select { min-height: 40px; width: 100%; color: var(--chalk); font-size: 16px; padding: 8px 10px; border-color: var(--steel-3); }
 .field.provider { margin-bottom: 12px; }
 .field small.stat-note { margin-top: 2px; }
+
+/* Statement import */
+.modal.wide { width: min(880px, 100%); }
+.map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 10px; }
+.table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--steel-3); border-radius: 8px; max-width: 100%; }
+table.mini { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.mini th, table.mini td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--steel-3); white-space: nowrap; vertical-align: middle; }
+table.mini th { color: var(--muted); font-weight: 600; background: var(--steel-2); }
+table.mini .num { text-align: right; font-variant-numeric: tabular-nums; }
+table.mini.review td:nth-child(2) { white-space: normal; min-width: 180px; max-width: 320px; }
+table.mini tr.dim td { color: var(--muted); }
+.import-summary { display: grid; gap: 2px; margin-bottom: 8px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.field textarea { width: 100%; min-height: 80px; }

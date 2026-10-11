@@ -4,9 +4,12 @@ import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CloudProvider } from './cloud/CloudProvider';
 import { isDemo, MemoryRepository } from './demo';
+import { startInstallWatch } from './install';
 import { StoreProvider } from './store';
 import './fonts/fonts.css';
 import './styles.css';
+
+startInstallWatch();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

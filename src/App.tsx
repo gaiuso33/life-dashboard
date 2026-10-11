@@ -6,6 +6,7 @@ import { Career } from './components/Career';
 import { Month } from './components/Month';
 import { Money } from './components/Money';
 import { Settings } from './components/Settings';
+import { promptInstall, useInstall } from './install';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Recovery } from './components/Recovery';
 import { CloudBadge } from './components/Account';
@@ -42,6 +43,7 @@ function initialTrainView(): TrainView {
 export function App() {
   const { data, ready, dispatch, saveFailed, recovery } = useStore();
   const cloud = useCloud();
+  const install = useInstall();
   const [syncOpen, setSyncOpen] = useState(!!cloud.resetToken);
   const [tab, setTab] = useState<Tab>('today');
   const [tour, setTour] = useState<number | null>(tourWanted ? 0 : null);
@@ -88,6 +90,11 @@ export function App() {
           {!isDemo && (
             <button className="link-btn" onClick={() => setSyncOpen(true)}>
               Sync and backup
+            </button>
+          )}
+          {install === 'ready' && (
+            <button className="link-btn" onClick={() => void promptInstall()}>
+              Install app
             </button>
           )}
         </div>

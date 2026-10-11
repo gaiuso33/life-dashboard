@@ -4,6 +4,7 @@ import type { Tab } from '../nav';
 import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../program';
 import type { DayDef, ExerciseDef } from '../program';
 import { TIER_LABEL } from '../rewards';
+import { promptInstall, useInstall } from '../install';
 import { useStore } from '../store';
 import type { RewardItem, Tier } from '../types';
 
@@ -11,6 +12,35 @@ const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', '
 const TIERS: Tier[] = ['week', 'biweek', 'month', 'landmark'];
 const digits = (s: string) => s.replace(/[^\d]/g, '');
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+
+function Install() {
+  const state = useInstall();
+  return (
+    <section className="panel" id="install">
+      <h2>Install on this device</h2>
+      {state === 'installed' && <p className="note first">Already installed. You’re using it as an app.</p>}
+      {state === 'ready' && (
+        <>
+          <p className="note first">Add it to your home screen or desktop. It opens full-screen and works offline.</p>
+          <button className="btn primary" onClick={() => void promptInstall()}>
+            Install app
+          </button>
+        </>
+      )}
+      {state === 'ios' && (
+        <p className="note first">
+          On iPhone and iPad there is no install button. In <strong>Safari</strong>, tap the Share icon, then <strong>Add to Home Screen</strong>. Other iPhone browsers can’t do this.
+        </p>
+      )}
+      {state === 'file' && <p className="note first">Installing needs the web address of the app. It doesn’t work when the page is opened as a file from your computer or phone.</p>}
+      {state === 'manual' && (
+        <p className="note first">
+          Your browser hasn’t offered an install button. In <strong>Chrome or Edge</strong>, open the browser menu (⋮) and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>. On the desktop it is also an icon at the right end of the address bar. Firefox on a computer can’t install web apps. If it isn’t listed, use the page’s normal address (not a private window or an in-app browser such as WhatsApp or Instagram) and reload once.
+        </p>
+      )}
+    </section>
+  );
+}
 
 export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => void }) {
   return (
@@ -20,6 +50,7 @@ export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => v
         <p className="sub">Make the dashboard fit you. Changes apply straight away, and your logged history is never rewritten.</p>
       </header>
       <div className="settings">
+        <Install />
         <Programme />
         <Categories />
         <Rewards />

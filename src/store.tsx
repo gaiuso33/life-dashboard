@@ -22,6 +22,7 @@ type Action =
   | { t: 'body'; entry: BodyEntry }
   | { t: 'goal'; value: number | null }
   | { t: 'txn-add'; txn: Txn }
+  | { t: 'txn-import'; txns: Txn[] }
   | { t: 'txn-del'; id: string }
   | { t: 'txn-cat'; id: string; category: string }
   | { t: 'money-set'; patch: Partial<MoneyData> }
@@ -97,6 +98,13 @@ function apply(state: AppData, a: Action): AppData {
       return { ...state, goalWeight: a.value };
     case 'txn-add':
       return { ...state, money: { ...state.money, txns: [...state.money.txns, a.txn] } };
+    case 'txn-import': {
+      // Imported entries are added only if their id is new and hasn't been deleted, so importing twice is harmless.
+      const have = new Set(state.money.txns.map((t) => t.id));
+      const dead = new Set(state.gone);
+      const fresh = a.txns.filter((t) => !have.has(t.id) && !dead.has(t.id));
+      return fresh.length === 0 ? state : { ...state, money: { ...state.money, txns: [...state.money.txns, ...fresh] } };
+    }
     case 'txn-del':
       return { ...withGone(state, a.id), money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== a.id) } };
     case 'txn-cat':

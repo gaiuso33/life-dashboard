@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.14)
+# Personal Life Dashboard — Product Spec (v0.15)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -164,11 +164,11 @@ Without those two values the app works exactly as before and the cloud section s
 **Limits to know.** Whole-dashboard sync (one row, up to 20 MB). Email confirmation uses Supabase's built-in mailer, which is rate-limited; use your own SMTP before real users. Deleting an account entirely needs a server-side admin call and is not in the app yet. The session is kept in this browser's storage, as with most web apps; the content security policy limits what scripts can run.
 
 ## 15. Demo mode (built)
-Open the app at its own link, `https://your-site/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
+Open the app at its own link,'https://life-dashboard-neon-ten.vercel.app` (or with `/demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 64 unit tests (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 39 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 103 unit tests (incl. the statement importer) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 43 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -179,3 +179,16 @@ Not verified against the live services; the request and reply formats follow eac
 
 ## 18. Fonts and outside requests (built)
 Barlow and Barlow Condensed (SIL Open Font License) are bundled into the app, so opening it, using it or running the demo makes no request to any font service or any other site. The security policy no longer lists any font host, and a browser test fails if the app contacts anything but its own address while in use. The only outside destinations are the ones a person chooses to enable: their chosen AI provider, GitHub (for commits) and the sync service.
+
+## 19. Statement import
+
+Money → "Import a statement" reads a CSV exported from any bank or wallet app (no bank-specific code; OPay-specific import is on ice).
+- Detects delimiter, the header row, and the columns (separate debit/credit or one signed amount); you can correct each guess, plus day-first or month-first dates.
+- Understands ₦, 1,234.56, 1.234,56, (500), 500- and DR/CR. Rows that don't fit the columns are left out and counted, never guessed.
+- Review step: per-row Spent / Received / Saved / Don't import and category. Transfers into savings are marked Saved; money returning from savings is not imported by default.
+- Entries get content-based ids, so importing the same or an overlapping statement adds nothing, and entries you deleted stay deleted. Everything is parsed in the browser; the file is never uploaded.
+- CSV only, up to 5 MB. PDF/Excel are rejected with a message.
+
+## 20. Installing the app
+
+Settings → "Install on this device" (and an "Install app" link in the side rail when the browser allows it). Chrome, Edge and Samsung Internet only offer installing when they choose to, so the app catches that offer at start-up and keeps it for the button. Where no offer exists it explains why: iPhone needs Safari → Share → Add to Home Screen; Firefox on a computer can't install web apps; a page opened as a file, a private window or an in-app browser (WhatsApp, Instagram) can't install either.
