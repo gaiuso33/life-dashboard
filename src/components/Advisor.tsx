@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SHARE_LABEL, buildSummary, enabledAreas, summaryJson } from '../advisorData';
 import { isDemo } from '../demo';
-import { AiError, SUGGESTED_QUESTIONS, askClaude, clearKey, loadKey, looksLikeKey, maskKey, saveKey, systemWith, weeklyReviewPrompt } from '../ai';
+import { AiError, PROVIDERS, SUGGESTED_QUESTIONS, askAi, clearKey, isProviderId, keyAdvice, loadKey, looksLikeKey, maskKey, providerOf, saveKey, systemWith, weeklyReviewPrompt } from '../ai';
 import type { ChatTurn } from '../ai';
 import { dailyNudges, reviewToText, weeklyReview } from '../coach';
 import { forecasts } from '../forecast';
 import type { Tab, TrainView } from '../nav';
 import { useStore } from '../store';
-import { DEFAULT_MODEL } from '../types';
 import type { ShareArea } from '../types';
 import { addDays, fmtShort, mondayOf, todayKey } from '../utils';
 
@@ -18,7 +17,7 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
   const today = todayKey();
   const monday = mondayOf(today);
   const [which, setWhich] = useState<'this' | 'last'>('this');
-  const [key, setKey] = useState(loadKey);
+  const [keyTick, setKeyTick] = useState(0);
   const [draft, setDraft] = useState('');
   const [keyMsg, setKeyMsg] = useState('');
   const [chat, setChat] = useState<ChatTurn[]>([]);
@@ -29,6 +28,10 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
   useEffect(() => () => abort.current?.abort(), []);
 
   const { settings } = data.advisor;
+  const provider = providerOf(settings.provider);
+  // Read again whenever the provider changes or a key is saved or removed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const key = useMemo(() => (isDemo ? '' : loadKey(provider.id)), [provider.id, keyTick]);
   const nudges = useMemo(() => dailyNudges(data, today), [data, today]);
   const reviewMonday = which === 'this' ? monday : addDays(monday, -7);
   const review = useMemo(() => weeklyReview(data, reviewMonday, today), [data, reviewMonday, today]);
@@ -49,7 +52,7 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
     setBusy('review');
     setError(null);
     try {
-      const text = await askClaude({ apiKey: key, model: settings.model, system: systemWith(summary), messages: [{ role: 'user', content: weeklyReviewPrompt(reviewToText(review)) }], maxTokens: 800, signal: abort.current.signal });
+      const text = await askAi({ provider: provider.id, apiKey: key, model: settings.model, system: systemWith(summary), messages: [{ role: 'user', content: weeklyReviewPrompt(reviewToText(review)) }], maxTokens: 800, signal: abort.current.signal });
       dispatch({ t: 'review-save', review: { week: reviewMonday, text, at: new Date().toISOString(), model: settings.model } });
     } catch (e) {
       fail('review', e);
@@ -69,7 +72,7 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
     setBusy('chat');
     setError(null);
     try {
-      const reply = await askClaude({ apiKey: key, model: settings.model, system: systemWith(summary), messages: turns.slice(-8), signal: abort.current.signal });
+      const reply = await askAi({ provider: provider.id, apiKey: key, model: settings.model, system: systemWith(summary), messages: turns.slice(-8), signal: abort.current.signal });
       setChat([...turns, { role: 'assistant', content: reply }]);
     } catch (e) {
       fail('chat', e);
@@ -80,15 +83,15 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
 
   const connect = () => {
     const k = draft.trim();
-    if (!looksLikeKey(k)) {
-      setKeyMsg('That doesn’t look like an Anthropic key. It starts with sk-ant- and has no spaces.');
+    if (!looksLikeKey(k, provider.id)) {
+      setKeyMsg(keyAdvice(provider.id));
       return;
     }
-    if (!saveKey(k)) {
+    if (!saveKey(k, provider.id)) {
       setKeyMsg('This browser wouldn’t let the key be saved, so it can’t be kept on this device.');
       return;
     }
-    setKey(k);
+    setKeyTick((n) => n + 1);
     setDraft('');
     setKeyMsg('');
   };
@@ -99,7 +102,7 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
     <div className="page">
       <header className="page-head">
         <h1>Advisor</h1>
-        <p className="sub">Nudges and your weekly review work on their own, without internet or an API key. Connect Claude to get written advice and ask questions.</p>
+        <p className="sub">Nudges and your weekly review work on their own, without internet or an API key. Connect an AI provider (Claude, OpenAI, Gemini, or hundreds of other models through OpenRouter) to get written advice and ask questions.</p>
       </header>
 
       <div className="cols">
@@ -171,14 +174,14 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
             )}
 
             <div className="ai-block">
-              <h3>Claude’s take</h3>
+              <h3>The AI’s take</h3>
               {saved ? (
                 <>
                   <p className="ai-text">{saved.text}</p>
                   <p className="note">Written {fmtShort(saved.at.slice(0, 10))}.</p>
                 </>
               ) : (
-                <p className="note first">{hasKey ? 'Not written yet for this week.' : 'Connect Claude below to add a written review.'}</p>
+                <p className="note first">{hasKey ? 'Not written yet for this week.' : 'Connect an AI provider below to add a written review.'}</p>
               )}
               <button className="btn primary" disabled={!hasKey || busy !== null || areas.length === 0} onClick={writeReview}>
                 {busy === 'review' ? 'Writing…' : saved ? 'Write it again' : 'Write my review'}
@@ -206,7 +209,7 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
           <section className="panel">
             <h2>Ask the advisor</h2>
             {!hasKey ? (
-              <p className="note first">Connect Claude below to ask questions about your numbers.</p>
+              <p className="note first">Connect an AI provider below to ask questions about your numbers.</p>
             ) : (
               <>
                 {chat.length === 0 && (
@@ -249,23 +252,44 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
           </section>
 
           <section className="panel">
-            <h2>Claude setup and privacy</h2>
+            <h2>AI setup and privacy</h2>
+            <label className="field provider">
+              <span>Provider</span>
+              <select
+                value={settings.provider}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!isProviderId(id)) return;
+                  dispatch({ t: 'advisor-set', settings: { ...settings, provider: id, models: { ...settings.models, [settings.provider]: settings.model }, model: settings.models?.[id] ?? providerOf(id).defaultModel } });
+                  setChat([]);
+                  setDraft('');
+                  setKeyMsg('');
+                  setError(null);
+                }}
+              >
+                {PROVIDERS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             {isDemo ? (
-              <p className="note first">Claude answers need your own API key, so they’re switched off in the demo. The coach and weekly review above work without one.</p>
+              <p className="note first">AI answers need your own API key, so they’re switched off in the demo. The coach and weekly review above work without one.</p>
             ) : hasKey ? (
               <div className="keyrow">
                 <span>
                   Connected, key ending <b>{maskKey(key)}</b>
                 </span>
-                <button className="btn" onClick={() => { clearKey(); setKey(''); setChat([]); }}>
+                <button className="btn" onClick={() => { clearKey(provider.id); setKeyTick((n) => n + 1); setChat([]); }}>
                   Remove key
                 </button>
               </div>
             ) : (
               <form className="keyform" onSubmit={(e) => { e.preventDefault(); connect(); }}>
                 <label className="field">
-                  <span>Anthropic API key</span>
-                  <input type="password" autoComplete="off" spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="sk-ant-…" />
+                  <span>{providerOf(settings.provider).name} API key</span>
+                  <input type="password" autoComplete="off" spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={provider.keyPlaceholder} />
                 </label>
                 <button className="btn primary">Connect</button>
               </form>
@@ -274,10 +298,11 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
 
             <label className="field model">
               <span>Model</span>
-              <input value={settings.model} onChange={(e) => dispatch({ t: 'advisor-set', settings: { ...settings, model: e.target.value } })} onBlur={() => { if (!settings.model.trim()) dispatch({ t: 'advisor-set', settings: { ...settings, model: DEFAULT_MODEL } }); }} spellCheck={false} />
+              <input value={settings.model} onChange={(e) => dispatch({ t: 'advisor-set', settings: { ...settings, model: e.target.value } })} onBlur={() => { if (!settings.model.trim()) dispatch({ t: 'advisor-set', settings: { ...settings, model: provider.defaultModel } }); }} spellCheck={false} aria-describedby="model-hint" />
+              <small id="model-hint" className="stat-note">{provider.modelHint}</small>
             </label>
 
-            <h3>What Claude can see</h3>
+            <h3>What the AI can see</h3>
             <ul className="shares">
               {AREAS.map((a) => (
                 <li key={a}>
@@ -299,7 +324,7 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
               Only these numbers are sent, with each question. Notes, names, project titles and your GitHub username never leave this device.
             </p>
             <p className="note">
-              The key stays in this browser, separate from your data, and isn’t in the exported file. Calls are billed to your Anthropic Console account, which is separate from a Claude app subscription. Use a key with a low monthly spend limit. Anyone who can open this browser profile can use the key.
+              The key stays in this browser, separate from your data, and isn’t in the exported file. The numbers go straight from this browser to {provider.name}, whose data terms apply. {provider.billing} Use a key with a low monthly spend limit. Anyone who can open this browser profile can use the key.
             </p>
           </section>
         </div>

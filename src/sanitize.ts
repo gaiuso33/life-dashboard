@@ -1,3 +1,4 @@
+import { isProviderId, providerOf } from './ai';
 import { programError } from './program';
 import type { DayKey } from './program';
 import { emptyAdvisor, emptyCareer, emptyMoney, emptyRewards } from './types';
@@ -163,7 +164,9 @@ export function sanitize(input: AppData): AppData {
     rewards: { items: Array.isArray(rewards.items) ? items : emptyRewards().items, claims, badges },
     advisor: {
       settings: {
-        model: str(adv.model).trim() || defAdvisor.settings.model,
+        provider: isProviderId(adv.provider) ? adv.provider : 'anthropic',
+        model: str(adv.model).trim() || providerOf(isProviderId(adv.provider) ? adv.provider : 'anthropic').defaultModel,
+        models: Object.fromEntries(Object.entries(obj(adv.models)).filter(([k, v]) => isProviderId(k) && typeof v === 'string' && v.trim() !== '').map(([k, v]) => [k, (v as string).trim().slice(0, 120)])),
         share: {
           training: share.training !== false,
           body: share.body !== false,
