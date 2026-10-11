@@ -1,3 +1,4 @@
+import { isDemo } from '../demo';
 import type { Vault, VaultApi } from './engine';
 
 export interface CloudSession {
@@ -27,6 +28,7 @@ export interface CloudConfig {
 }
 
 export const cloudConfig = (): CloudConfig | null => {
+  if (isDemo) return null;
   const url = import.meta.env.VITE_SUPABASE_URL;
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   return url && anonKey ? { url: url.replace(/\/+$/, ''), anonKey } : null;

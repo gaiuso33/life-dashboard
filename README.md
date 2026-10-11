@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.11)
+# Personal Life Dashboard — Product Spec (v0.12)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -162,3 +162,12 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 Without those two values the app works exactly as before and the cloud section says it is switched off.
 
 **Limits to know.** Whole-dashboard sync (one row, up to 20 MB). Email confirmation uses Supabase's built-in mailer, which is rate-limited; use your own SMTP before real users. Deleting an account entirely needs a server-side admin call and is not in the app yet. The session is kept in this browser's storage, as with most web apps; the content security policy limits what scripts can run.
+
+## 15. Demo mode (built)
+Open the app with `?demo` (for example `https://your-site/?demo`) to show it on made-up data. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `?demo&tour=0` to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
+
+## 16. Testing (built)
+- `npm test`: 54 unit tests (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 32 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
+- Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.

@@ -7,16 +7,22 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e:build": "node e2e/build.mjs",
+    "e2e": "node e2e/build.mjs && playwright test",
+    "e2e:only": "playwright test"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^20.19.43",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "axe-core": "^4.14.0",
     "typescript": "^5.5.3",
     "vite": "^5.4.0",
     "vite-plugin-singlefile": "^2.0.2",

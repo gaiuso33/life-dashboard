@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SHARE_LABEL, buildSummary, enabledAreas, summaryJson } from '../advisorData';
+import { isDemo } from '../demo';
 import { AiError, SUGGESTED_QUESTIONS, askClaude, clearKey, loadKey, looksLikeKey, maskKey, saveKey, systemWith, weeklyReviewPrompt } from '../ai';
 import type { ChatTurn } from '../ai';
 import { dailyNudges, reviewToText, weeklyReview } from '../coach';
@@ -249,7 +250,9 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
 
           <section className="panel">
             <h2>Claude setup and privacy</h2>
-            {hasKey ? (
+            {isDemo ? (
+              <p className="note first">Claude answers need your own API key, so they’re switched off in the demo. The coach and weekly review above work without one.</p>
+            ) : hasKey ? (
               <div className="keyrow">
                 <span>
                   Connected, key ending <b>{maskKey(key)}</b>
