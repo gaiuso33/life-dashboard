@@ -13,11 +13,18 @@ for (const block of config.headers ?? []) if (block.source === '/(.*)') for (con
 if (process.env.CSP_EXTRA_CONNECT && headers['Content-Security-Policy']) {
   headers['Content-Security-Policy'] = headers['Content-Security-Policy'].replace('connect-src', `connect-src ${process.env.CSP_EXTRA_CONNECT}`);
 }
+const rewrites = Object.fromEntries((config.rewrites ?? []).map((r) => [r.source, r.destination]));
+const redirects = Object.fromEntries((config.redirects ?? []).map((r) => [r.source, r.destination]));
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
 http
   .createServer((req, res) => {
-    const name = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (redirects[raw]) {
+      res.writeHead(307, { location: redirects[raw] + new URL(req.url, 'http://x').search });
+      return res.end();
+    }
+    const name = rewrites[raw] ?? raw;
     const file = path.join(root, name === '/' ? 'index.html' : name);
     if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.writeHead(404);

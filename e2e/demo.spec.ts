@@ -29,8 +29,8 @@ test.describe('demo mode', () => {
     await page.getByRole('button', { name: 'Advisor' }).first().click();
     await expect(page.getByLabel('Anthropic API key')).toHaveCount(0);
     await expect(page.getByText('switched off in the demo')).toBeVisible();
-    // Only the page itself and the web fonts it asks for; no sync, API or analytics calls.
-    expect([...hosts].filter((h) => h !== 'localhost:4173' && !/^fonts\.(googleapis|gstatic)\.com$/.test(h))).toEqual([]);
+    // Nothing but the page itself: no fonts, sync, API or analytics requests.
+    expect([...hosts].filter((h) => h !== 'localhost:4173')).toEqual([]);
 
     // reload resets it
     await page.reload();
@@ -101,5 +101,43 @@ test.describe('demo mode', () => {
     await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
     await expect(page.getByText('Made-up data')).toHaveCount(0);
     expect(await stored(page)).toBeNull();
+  });
+
+  for (const path of ['demo', 'demo/']) {
+    test(`has its own link: /${path}`, async ({ browser }) => {
+      const { page, errors } = await newDevice(browser, DESKTOP, 'about:blank');
+      const failed: string[] = [];
+      page.on('response', (r) => r.status() >= 400 && failed.push(`${r.status()} ${r.url()}`));
+      await page.goto(APP + path);
+      await expect(page.getByText('Made-up data. Nothing is saved or uploaded')).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Demo tour' })).toBeVisible();
+      // files the page points to are found at the app's real folder, not under /demo
+      expect(new URL(page.url()).pathname, 'a trailing slash is tidied away').toBe('/demo');
+      expect(await page.evaluate(() => (document.querySelector('link[rel=manifest]') as HTMLLinkElement).href)).toBe(APP + 'manifest.webmanifest');
+      expect(await page.evaluate(() => (document.querySelector('link[rel=icon]') as HTMLLinkElement).href)).toBe(APP + 'icon-192.png');
+      await page.getByRole('button', { name: 'Skip tour' }).click();
+      expect(failed, 'no missing files').toEqual([]);
+      // the same switches work on the short link
+      await page.goto(APP + path + '?tour=0');
+      await expect(page.getByRole('region', { name: 'Demo tour' })).toHaveCount(0);
+      // leaving goes to the real app
+      await page.getByRole('button', { name: 'Start my own' }).first().click();
+      await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+      expect(page.url()).toBe(APP);
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('the demo link never touches real data stored by the main app', async ({ browser }) => {
+    const { page } = await newDevice(browser);
+    await setUpEmptyDashboard(page);
+    await page.waitForTimeout(500);
+    const real = await page.evaluate(() => localStorage.getItem('life-dashboard:v1'));
+    await page.goto(APP + 'demo');
+    await page.getByRole('button', { name: '5', exact: true }).first().click();
+    await page.waitForTimeout(700);
+    expect(await page.evaluate(() => localStorage.getItem('life-dashboard:v1'))).toBe(real);
+    await page.getByRole('button', { name: 'Start my own' }).first().click();
+    await expect(page.getByText('Today’s plates')).toBeVisible();
   });
 });

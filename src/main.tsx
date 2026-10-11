@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { CloudProvider } from './cloud/CloudProvider';
 import { isDemo, MemoryRepository } from './demo';
 import { StoreProvider } from './store';
+import './fonts/fonts.css';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
