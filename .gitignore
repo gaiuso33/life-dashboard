@@ -2,3 +2,7 @@
 /node_modules
 life-data.json.env.local
 .env*.local
+dist-e2e
+dist-e2e-cloud
+test-results
+playwright-report

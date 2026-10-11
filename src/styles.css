@@ -408,7 +408,8 @@ select:hover { border-color: var(--steel-3); }
 .cal-h { color: var(--muted); font-size: 12px; text-align: center; padding: 2px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
 .cal-d { display: grid; align-content: start; gap: 3px; min-height: 92px; padding: 6px; text-align: left; background: var(--steel-2); border: 1px solid var(--steel-3); border-radius: 8px; overflow: hidden; }
 .cal-d:hover { border-color: var(--muted); }
-.cal-d.out { opacity: .9; }
+.cal-d.out { background: transparent; }
+.cal-d.out .n { color: var(--faint); }
 .cal-d.is-today .n { background: var(--chalk); color: var(--ink); border-radius: 999px; padding: 0 6px; justify-self: start; }
 .cal-d.is-sel { outline: 2px solid var(--chalk); outline-offset: -2px; }
 .cal-d .n { font-weight: 600; font-size: 14px; }
@@ -527,3 +528,12 @@ select:hover { border-color: var(--steel-3); }
 .check input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--plate-green); }
 .modal h4 { margin: 16px 0 4px; font-size: 15px; }
 .cloud-badge { margin-right: auto; }
+
+/* Demo mode */
+.banner.demo { border-color: var(--plate-green); }
+.tour { grid-template-columns: minmax(0, 1fr); position: fixed; z-index: 30; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 32px)); background: var(--steel-1); border: 1px solid var(--chalk); border-radius: 12px; padding: 16px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55); display: grid; gap: 8px; }
+.tour h2 { margin: 0; font-size: 18px; }
+.tour .row-action { grid-column: auto; justify-content: flex-start; }
+.tour p { margin: 0; color: var(--muted); font-size: 14px; }
+.tour .tour-count { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+@media (max-width: 560px) { .tour { right: 8px; left: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; } }

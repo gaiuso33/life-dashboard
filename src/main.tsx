@@ -3,13 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CloudProvider } from './cloud/CloudProvider';
+import { isDemo, MemoryRepository } from './demo';
 import { StoreProvider } from './store';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <StoreProvider>
+      <StoreProvider repo={isDemo ? new MemoryRepository() : undefined}>
         <CloudProvider>
           <App />
         </CloudProvider>

@@ -11,6 +11,8 @@ import { Recovery } from './components/Recovery';
 import { CloudBadge } from './components/Account';
 import { useCloud } from './cloud/CloudProvider';
 import { Sync } from './components/Sync';
+import { DemoTour } from './components/DemoTour';
+import { isDemo, leaveDemo, tourWanted } from './demo';
 import { Welcome } from './components/Welcome';
 import { Rewards } from './components/Rewards';
 import { Today } from './components/Today';
@@ -42,6 +44,7 @@ export function App() {
   const cloud = useCloud();
   const [syncOpen, setSyncOpen] = useState(!!cloud.resetToken);
   const [tab, setTab] = useState<Tab>('today');
+  const [tour, setTour] = useState<number | null>(tourWanted ? 0 : null);
   const [view, setView] = useState<TrainView>(initialTrainView);
 
   // Badges are saved the moment they're earned, so a broken streak or a deleted entry never takes one back.
@@ -82,9 +85,11 @@ export function App() {
           <button className="link-btn" onClick={() => go('settings')}>
             Settings
           </button>
-          <button className="link-btn" onClick={() => setSyncOpen(true)}>
-            Sync and backup
-          </button>
+          {!isDemo && (
+            <button className="link-btn" onClick={() => setSyncOpen(true)}>
+              Sync and backup
+            </button>
+          )}
         </div>
       </aside>
 
@@ -103,11 +108,33 @@ export function App() {
           <button className="link-btn" onClick={() => go('settings')}>
             Settings
           </button>
-          <button className="link-btn" onClick={() => setSyncOpen(true)}>
-            Sync and backup
-          </button>
+          {!isDemo && (
+            <button className="link-btn" onClick={() => setSyncOpen(true)}>
+              Sync and backup
+            </button>
+          )}
         </div>
-        {data.sample && (
+        {isDemo && (
+          <div className="banner demo" role="status">
+            <p>
+              <b>Demo.</b> Made-up data. Nothing is saved or uploaded, and reloading resets it.
+            </p>
+            <div className="row-action">
+              {tour === null && (
+                <button className="btn" onClick={() => setTour(0)}>
+                  Take the tour
+                </button>
+              )}
+              <button className="btn" onClick={() => window.location.reload()}>
+                Reset demo
+              </button>
+              <button className="btn primary" onClick={leaveDemo}>
+                Start my own
+              </button>
+            </div>
+          </div>
+        )}
+        {data.sample && !isDemo && (
           <div className="banner" role="status">
             <p>You’re looking at sample data. Start fresh to log your own.</p>
             <button
@@ -133,6 +160,7 @@ export function App() {
         </ErrorBoundary>
       </main>
       {syncOpen && <Sync onClose={() => setSyncOpen(false)} />}
+      {tour !== null && <DemoTour step={tour} setStep={setTour} go={go} onClose={() => setTour(null)} />}
     </div>
   );
 }

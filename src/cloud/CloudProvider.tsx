@@ -34,6 +34,8 @@ interface CloudCtx {
 }
 
 const Ctx = createContext<CloudCtx | null>(null);
+/** Minimum gap between automatic checks. Overridable at build time so end-to-end tests don't have to wait. */
+const MIN_GAP_MS = Number(import.meta.env.VITE_SYNC_MIN_GAP_MS) || 15000;
 const REMEMBER_SLOT = 'life-dashboard:v1:cloud-remember';
 const LAST_SLOT = 'life-dashboard:v1:cloud-last';
 const read = (k: string) => {
@@ -201,7 +203,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     if (!api) return;
     const poll = (e?: Event) => {
       // Coming back online always tries straight away; other triggers wait at least 15 seconds between attempts.
-      const wait = e?.type === 'online' ? 0 : 15000;
+      const wait = e?.type === 'online' ? 0 : MIN_GAP_MS;
       if (!api.session || locked.current || document.visibilityState !== 'visible' || Date.now() - lastRun.current < wait) return;
       void run();
     };
