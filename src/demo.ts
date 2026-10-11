@@ -9,8 +9,17 @@ const params = (): URLSearchParams => {
   }
 };
 
-/** Open the app with `?demo` to run it on sample data that is never saved, synced or mixed with real data. */
-export const isDemo: boolean = params().has('demo');
+const DEMO_PATH = /^(.*\/)demo\/?$/;
+const onDemoPath = (): boolean => {
+  try {
+    return DEMO_PATH.test(window.location.pathname);
+  } catch {
+    return false;
+  }
+};
+
+/** Open the app at `/demo` (or with `?demo`) to run it on sample data that is never saved, synced or mixed with real data. */
+export const isDemo: boolean = params().has('demo') || onDemoPath();
 /** `?demo&tour=0` skips the guided tour (useful when someone else is driving). */
 export const tourWanted: boolean = isDemo && params().get('tour') !== '0';
 
@@ -25,6 +34,7 @@ export class MemoryRepository implements Repository {
   async clear(): Promise<void> {}
 }
 
+/** Back to the real app: from `/demo` to the folder above it, from `?demo` to the same page without it. */
 export const leaveDemo = (): void => {
-  window.location.href = window.location.pathname;
+  window.location.href = window.location.pathname.replace(DEMO_PATH, '$1');
 };
