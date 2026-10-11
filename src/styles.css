@@ -537,3 +537,8 @@ select:hover { border-color: var(--steel-3); }
 .tour p { margin: 0; color: var(--muted); font-size: 14px; }
 .tour .tour-count { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
 @media (max-width: 560px) { .tour { right: 8px; left: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; } }
+
+/* AI provider choice */
+.field select { min-height: 40px; width: 100%; color: var(--chalk); font-size: 16px; padding: 8px 10px; border-color: var(--steel-3); }
+.field.provider { margin-bottom: 12px; }
+.field small.stat-note { margin-top: 2px; }

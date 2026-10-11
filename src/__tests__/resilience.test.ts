@@ -149,3 +149,19 @@ describe('storage', () => {
     expect(await new LocalRepository().save(emptyData())).toEqual({ ok: false, reason: 'full' });
   });
 });
+
+describe('advisor provider setting', () => {
+  it('unknown providers and junk model maps fall back to safe values', () => {
+    const d = emptyData() as unknown as Record<string, unknown>;
+    (d.advisor as { settings: Record<string, unknown> }).settings = { provider: 'skynet', model: '', models: { openai: 'gpt-x', skynet: 'x', google: 5 }, share: {} };
+    const out = sanitize(d as never);
+    expect(out.advisor.settings.provider).toBe('anthropic');
+    expect(out.advisor.settings.model).toBe('claude-sonnet-5-5');
+    expect(out.advisor.settings.models).toEqual({ openai: 'gpt-x' });
+  });
+  it('an older save without a provider keeps its Anthropic model', () => {
+    const d = emptyData() as unknown as { advisor: { settings: Record<string, unknown> } };
+    d.advisor.settings = { model: 'claude-custom', share: {} };
+    expect(sanitize(d as never).advisor.settings).toMatchObject({ provider: 'anthropic', model: 'claude-custom' });
+  });
+});

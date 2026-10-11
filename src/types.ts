@@ -1,3 +1,4 @@
+import type { ProviderId } from './ai';
 import type { DayDef, DayKey, MEASURES } from './program';
 import { addDays, todayKey } from './utils';
 
@@ -132,7 +133,11 @@ export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 export type ShareArea = 'training' | 'body' | 'money' | 'career' | 'rewards';
 
 export interface AdvisorSettings {
+  /** Which AI service answers. Keys are kept per provider on the device and are never part of the data. */
+  provider: ProviderId;
   model: string;
+  /** The model last used with each provider, so switching back doesn't lose it. */
+  models?: Partial<Record<ProviderId, string>>;
   /** Which areas of numbers may be sent to the AI. Never includes notes, names or other free text. */
   share: Record<ShareArea, boolean>;
 }
@@ -150,7 +155,7 @@ export interface AdvisorData {
 }
 
 export const emptyAdvisor = (): AdvisorData => ({
-  settings: { model: DEFAULT_MODEL, share: { training: true, body: true, money: true, career: true, rewards: true } },
+  settings: { provider: 'anthropic', model: DEFAULT_MODEL, models: {}, share: { training: true, body: true, money: true, career: true, rewards: true } },
   reviews: [],
 });
 
