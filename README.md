@@ -188,3 +188,7 @@ Money → "Import a statement" reads a CSV exported from any bank or wallet app 
 - Review step: per-row Spent / Received / Saved / Don't import and category. Transfers into savings are marked Saved; money returning from savings is not imported by default.
 - Entries get content-based ids, so importing the same or an overlapping statement adds nothing, and entries you deleted stay deleted. Everything is parsed in the browser; the file is never uploaded.
 - CSV only, up to 5 MB. PDF/Excel are rejected with a message.
+
+## 20. Installing the app
+
+Settings → "Install on this device" (and an "Install app" link in the side rail when the browser allows it). Chrome, Edge and Samsung Internet only offer installing when they choose to, so the app catches that offer at start-up and keeps it for the button. Where no offer exists it explains why: iPhone needs Safari → Share → Add to Home Screen; Firefox on a computer can't install web apps; a page opened as a file, a private window or an in-app browser (WhatsApp, Instagram) can't install either.
