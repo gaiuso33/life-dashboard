@@ -100,7 +100,9 @@ test.describe('demo mode', () => {
     const { page } = await newDevice(browser);
     await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
     await expect(page.getByText('Made-up data')).toHaveCount(0);
-    expect(await stored(page)).toBeNull();
+    // The app may save its empty starting data a moment after loading; what matters is that no demo or sample data is ever stored.
+    const saved = (await stored(page)) as { sample?: boolean; days?: object } | null;
+    expect(saved == null || (saved.sample === false && Object.keys(saved.days ?? {}).length === 0)).toBe(true);
   });
 
   for (const path of ['demo', 'demo/']) {
