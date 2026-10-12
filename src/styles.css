@@ -556,3 +556,4 @@ table.mini tr.dim td { color: var(--muted); }
 .import-summary { display: grid; gap: 2px; margin-bottom: 8px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .field textarea { width: 100%; min-height: 80px; }
+.btn.ghost.danger { color: #ff8a80; }

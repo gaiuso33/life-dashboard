@@ -215,6 +215,21 @@ function SignedIn() {
           Delete cloud copy
         </button>
       </div>
+      <div className="row-action">
+        <button
+          className="btn ghost danger"
+          onClick={async () => {
+            if (!window.confirm('Delete your account? This removes your sign-in and your encrypted cloud copy for good, and can’t be undone. Your data stays on the devices you’ve used.')) return;
+            try {
+              await c.deleteAccount();
+            } catch (e) {
+              setMsg(e instanceof Error ? e.message : 'Couldn’t delete the account.');
+            }
+          }}
+        >
+          Delete my account
+        </button>
+      </div>
       {msg && <p className="note" role="status">{msg}</p>}
     </div>
   );

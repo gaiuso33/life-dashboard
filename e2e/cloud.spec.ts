@@ -217,3 +217,19 @@ test('deleting the cloud copy leaves each device’s data alone', async () => {
   expect(Object.keys((await stored(p)).days).length).toBeGreaterThan(0);
   for (const d of [L, P]) expect(d.errors).toEqual([]);
 });
+
+test('deleting the account removes the sign-in and the cloud copy but keeps local data', async () => {
+  const p = P.page; // the sync window is still open from the previous test
+  await p.getByRole('button', { name: 'Delete my account' }).click();
+  await expect(p.getByRole('radio', { name: 'Sign in' })).toBeVisible();
+  const s = await admin();
+  expect(s.users).toHaveLength(0);
+  expect(s.vaults).toHaveLength(0);
+  expect(await p.evaluate(() => localStorage.getItem('life-dashboard:v1:cloud-session'))).toBeNull();
+  expect(Object.keys((await stored(p)).days).length).toBeGreaterThan(0);
+  await p.getByLabel('Email').fill(EMAIL);
+  await p.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await p.getByRole('button', { name: 'Sign in', exact: true }).last().click();
+  await expect(p.locator('.err, [role=alert]').first()).toBeVisible();
+  expect(P.errors).toEqual([]);
+});

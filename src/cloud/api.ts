@@ -182,6 +182,14 @@ export class CloudApi implements VaultApi {
     return this.row(((await r.json()) as unknown[])[0]);
   }
 
+  /** Removes the account itself (and its encrypted copy) through a database function the person is allowed to call on their own account. */
+  async deleteAccount(): Promise<void> {
+    const r = await this.call('/rest/v1/rpc/delete_my_account', { method: 'POST', auth: true, body: '{}' });
+    if (!r.ok) return this.failure(r);
+    this.session = null;
+    saveSession(null);
+  }
+
   async deleteVault(): Promise<void> {
     const r = await this.vaultCall(`?user_id=eq.${encodeURIComponent(this.session?.user.id ?? '')}`, { method: 'DELETE' });
     if (!r.ok) return this.failure(r);

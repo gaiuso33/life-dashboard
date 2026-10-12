@@ -168,7 +168,7 @@ Open the app at its own link,'https://life-dashboard-neon-ten.vercel.app` (or wi
 
 ## 16. Testing (built)
 - `npm test`: 103 unit tests (incl. the statement importer) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 43 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 44 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -192,3 +192,7 @@ Money → "Import a statement" reads a CSV exported from any bank or wallet app 
 ## 20. Installing the app
 
 Settings → "Install on this device" (and an "Install app" link in the side rail when the browser allows it). Chrome, Edge and Samsung Internet only offer installing when they choose to, so the app catches that offer at start-up and keeps it for the button. Where no offer exists it explains why: iPhone needs Safari → Share → Add to Home Screen; Firefox on a computer can't install web apps; a page opened as a file, a private window or an in-app browser (WhatsApp, Instagram) can't install either.
+
+## 21. Deleting an account
+
+Sync and backup → "Delete my account" removes the sign-in and the encrypted copy for good; data on the devices you've used is kept. It calls a database function, `delete_my_account()`, defined at the end of `supabase/schema.sql`. **If you set Supabase up earlier, run that last block in the SQL editor once**, or the button will report an error. The function can only delete the caller's own account.
