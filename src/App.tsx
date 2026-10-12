@@ -155,7 +155,7 @@ export function App() {
           </div>
         )}
         <ErrorBoundary inline key={tab}>
-          {tab === 'today' && <Today go={go} />}
+          {tab === 'today' && <Today go={go} onSync={() => setSyncOpen(true)} />}
           {tab === 'month' && <Month />}
           {tab === 'train' && <Train view={view} setView={setView} />}
           {tab === 'money' && <Money />}
