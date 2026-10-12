@@ -109,7 +109,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
             </ol>
             <label className="btn file-btn">
               Choose a CSV file
-              <input type="file" accept=".csv,text/csv,text/plain,.txt" onChange={(e) => { void pickFile(e.target.files?.[0]); e.target.value = ''; }} />
+              <input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values,application/vnd.ms-excel" onChange={(e) => { void pickFile(e.target.files?.[0]); e.target.value = ''; }} />
             </label>
             <label className="field">
               <span>Or paste the rows here</span>
@@ -235,11 +235,11 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
               {(built.unreadable > 0 || built.outOfRange > 0) && <p className="note first">{built.unreadable + built.outOfRange} {built.unreadable + built.outOfRange === 1 ? 'row' : 'rows'} in the file couldn’t be read and {built.unreadable + built.outOfRange === 1 ? 'is' : 'are'} left out.</p>}
             </div>
             <p className="note">Transfers into your own savings are marked <b>Saved</b>, and money coming back out of savings is marked <b>Don’t import</b>, so they don’t count as spending or income. Change anything that looks wrong.</p>
-            <div className="table-wrap" tabIndex={0} role="region" aria-label="Entries to import">
-              <table className="mini review">
+            <div className="table-wrap stack" tabIndex={0} role="region" aria-label="Entries to import">
+              <table className="mini review" role="table">
                 <caption className="sr-only">Entries to import</caption>
                 <thead>
-                  <tr>
+                  <tr role="row">
                     <th scope="col">Date</th>
                     <th scope="col">Description</th>
                     <th scope="col" className="num">Amount</th>
@@ -249,11 +249,11 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                 </thead>
                 <tbody>
                   {rows.slice(0, showAll ? undefined : SHOWN).map((r, i) => (
-                    <tr key={i} className={r.kind === 'skip' ? 'dim' : undefined}>
-                      <td>{fmtShort(r.date)}</td>
-                      <td>{r.note || <span className="muted-s">No description</span>}</td>
-                      <td className="num">{r.direction === 'out' ? '−' : '+'}{naira(r.amount)}</td>
-                      <td>
+                    <tr key={i} role="row" className={r.kind === 'skip' ? 'dim' : undefined}>
+                      <td role="cell">{fmtShort(r.date)}</td>
+                      <td role="cell">{r.note || <span className="muted-s">No description</span>}</td>
+                      <td role="cell" className="num">{r.direction === 'out' ? '−' : '+'}{naira(r.amount)}</td>
+                      <td role="cell">
                         <select value={r.kind} aria-label={`Type for ${r.note || 'entry'} on ${r.date}`} onChange={(e) => edit(i, { kind: e.target.value as RowKind })}>
                           {(Object.keys(KIND_LABEL) as RowKind[]).map((k) => (
                             <option key={k} value={k} disabled={(k === 'expense' || k === 'saving') && r.direction === 'in'}>
@@ -262,7 +262,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                           ))}
                         </select>
                       </td>
-                      <td>
+                      <td role="cell">
                         {r.kind === 'expense' ? (
                           <select value={r.category} aria-label={`Category for ${r.note || 'entry'} on ${r.date}`} onChange={(e) => edit(i, { category: e.target.value })}>
                             {categories.map((c) => <option key={c}>{c}</option>)}
