@@ -4,7 +4,8 @@ import { isDemo } from '../demo';
 import { AiError, PROVIDERS, SUGGESTED_QUESTIONS, askAi, clearKey, isProviderId, keyAdvice, loadKey, looksLikeKey, maskKey, providerOf, saveKey, systemWith, weeklyReviewPrompt } from '../ai';
 import type { ChatTurn } from '../ai';
 import { dailyNudges, reviewToText, weeklyReview } from '../coach';
-import { forecasts } from '../forecast';
+import { CONFIDENCE_WORD, forecasts } from '../forecast';
+import { FanChart } from '../FanChart';
 import type { Tab, TrainView } from '../nav';
 import { useStore } from '../store';
 import type { ShareArea } from '../types';
@@ -199,11 +200,14 @@ export function Advisor({ go }: { go: (t: Tab, v?: TrainView) => void }) {
                 <li key={f.id} className={`tone-${f.tone}`}>
                   <b>{f.title}</b>
                   <span className="fc-head">{f.headline}</span>
+                  {f.confidence && <span className={`fc-conf conf-${f.confidence}`}>{CONFIDENCE_WORD[f.confidence]}</span>}
+                  {f.chart && <FanChart chart={f.chart} label={`${f.title}: ${f.headline}. The shaded area is the likely range.`} />}
                   <small>{f.detail}</small>
+                  {f.trackRecord && <small className="fc-track">{f.trackRecord}</small>}
                 </li>
               ))}
             </ul>
-            <p className="note">Simple trend lines from your own logs. They get sharper as the history grows.</p>
+            <p className="note">Estimates from your own logs, shown with a range, not a promise. The range narrows as the history grows.</p>
           </section>
 
           <section className="panel">

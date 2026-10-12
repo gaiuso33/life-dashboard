@@ -572,3 +572,14 @@ table.mini tr.dim td { color: var(--muted); }
   .rem-row { grid-template-columns: 1fr auto; }
   .rem-row .row-action { grid-column: auto; }
 }
+.forecasts .fc-conf { justify-self: start; font-size: 12px; letter-spacing: .02em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.forecasts .fc-conf.conf-high { color: var(--plate-green); border-color: var(--plate-green); }
+.forecasts .fc-track { font-style: italic; }
+.fan { width: 100%; max-width: 420px; height: auto; margin: 6px 0 2px; }
+.fan-band { fill: var(--plate-blue); opacity: .18; stroke: none; }
+.fan-hist { fill: none; stroke: var(--chalk); stroke-width: 1.5; }
+.fan-dot { fill: var(--chalk); }
+.fan-mid { fill: none; stroke: var(--plate-blue); stroke-width: 2; stroke-dasharray: 5 4; }
+.fan-end { fill: var(--plate-blue); }
+.fan-goal { stroke: var(--plate-yellow); stroke-width: 1; stroke-dasharray: 2 3; }
+.fan-text { fill: var(--muted); font-size: 10px; font-family: var(--body, inherit); }
