@@ -31,6 +31,8 @@ interface CloudCtx {
   unlock: (passphrase: string) => Promise<void>;
   syncNow: () => void;
   deleteCloudCopy: () => Promise<void>;
+  /** Deletes the account and its cloud copy. Data on this device is kept. */
+  deleteAccount: () => Promise<void>;
 }
 
 const Ctx = createContext<CloudCtx | null>(null);
@@ -273,6 +275,20 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         await run();
       },
       syncNow: () => void run(),
+      deleteAccount: async () => {
+        await api!.deleteAccount();
+        pass.current = null;
+        keyCache.current.clear();
+        locked.current = false;
+        lastStable.current = null;
+        setLock(null);
+        setEmail(null);
+        setError('');
+        setLastSynced(null);
+        write(LAST_SLOT, null);
+        setStatus('signed-out');
+        void forgetKeys();
+      },
       deleteCloudCopy: async () => {
         await api!.deleteVault();
         lastStable.current = null;

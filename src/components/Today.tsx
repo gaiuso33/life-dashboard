@@ -1,4 +1,5 @@
 import { Barbell } from '../Barbell';
+import { GettingStarted } from './GettingStarted';
 import { ITEMS, dayScore, dayStatus, dayStreak, nextSession, plannedFor, sessionProgress, sessionsInWeek, weekStreak } from '../derive';
 import type { ItemKey } from '../derive';
 import type { Tab, TrainView } from '../nav';
@@ -28,7 +29,7 @@ function Row({ k, title, detail, done, children }: { k: ItemKey; title: string; 
   );
 }
 
-export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
+export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onSync: () => void }) {
   const { data, dispatch } = useStore();
   const today = todayKey();
   const log = data.days[today] ?? {};
@@ -58,6 +59,8 @@ export function Today({ go }: { go: (t: Tab, v?: TrainView) => void }) {
         <h1>{fmtLong(today)}</h1>
         <p className="sub">{score === 4 ? 'All four plates are on the bar.' : `${score} of 4 plates loaded. Three or more counts as a strong day.`}</p>
       </header>
+
+      <GettingStarted go={go} onSync={onSync} />
 
       <section className="hero panel">
         <Barbell status={status} />

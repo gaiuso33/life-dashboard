@@ -86,6 +86,14 @@ http
       st.users.get(uid).password = body.password;
       return send(200, {});
     }
+    if (url.pathname === '/rest/v1/rpc/delete_my_account' && q.method === 'POST') {
+      const uid = who();
+      if (!uid) return send(401, { message: 'JWT expired', code: 'PGRST301' });
+      st.users.delete(uid);
+      st.vaults.delete(uid);
+      for (const [k, t] of st.tokens) if (t.uid === uid) st.tokens.delete(k);
+      return send(204);
+    }
     if (url.pathname === '/rest/v1/vaults') {
       const uid = who();
       if (!uid) return send(401, { message: 'JWT expired', code: 'PGRST301' });

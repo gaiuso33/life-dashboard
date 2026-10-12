@@ -16,3 +16,22 @@ create policy "own vault: read"   on public.vaults for select using (user_id = a
 create policy "own vault: insert" on public.vaults for insert with check (user_id = auth.uid());
 create policy "own vault: update" on public.vaults for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "own vault: delete" on public.vaults for delete using (user_id = auth.uid());
+
+-- Lets a signed-in person delete their own account (and, through the cascade above, their encrypted copy).
+-- Run this as well if you set the database up before account deletion was added.
+create or replace function public.delete_my_account()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not signed in';
+  end if;
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;

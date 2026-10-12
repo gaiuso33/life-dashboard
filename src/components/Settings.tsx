@@ -5,13 +5,74 @@ import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../pro
 import type { DayDef, ExerciseDef } from '../program';
 import { TIER_LABEL } from '../rewards';
 import { promptInstall, useInstall } from '../install';
+import { buildIcs, downloadIcs, loadReminders, saveReminders } from '../reminders';
+import type { ReminderPlan } from '../reminders';
 import { useStore } from '../store';
 import type { RewardItem, Tier } from '../types';
+import { todayKey } from '../utils';
 
 const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TIERS: Tier[] = ['week', 'biweek', 'month', 'landmark'];
 const digits = (s: string) => s.replace(/[^\d]/g, '');
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+
+const REMINDER_ROWS: { key: keyof ReminderPlan; label: string; hint: string }[] = [
+  { key: 'checkin', label: 'Daily check-in', hint: 'Every day' },
+  { key: 'training', label: 'Training day', hint: 'On your programme’s gym days' },
+  { key: 'money', label: 'Log spending', hint: 'Every day' },
+  { key: 'review', label: 'Weekly review', hint: 'Sundays' },
+];
+
+function Reminders() {
+  const [plan, setPlan] = useState<ReminderPlan>(loadReminders);
+  const [made, setMade] = useState(false);
+  const set = (k: keyof ReminderPlan, p: Partial<ReminderPlan[typeof k]>) => {
+    const next = { ...plan, [k]: { ...plan[k], ...p } };
+    setPlan(next);
+    saveReminders(next);
+    setMade(false);
+  };
+  return (
+    <section className="panel" id="reminders">
+      <h2>Reminders</h2>
+      <p className="note first">
+        Pick what you want to be reminded of, then add them to your phone’s calendar. Your calendar does the reminding, even when this app is closed, and nothing is sent anywhere.
+      </p>
+      <ul className="rows">
+        {REMINDER_ROWS.map((r) => (
+          <li key={r.key} className="row rem-row">
+            <label className="check">
+              <input type="checkbox" checked={plan[r.key].on} onChange={(e) => set(r.key, { on: e.target.checked })} />
+              <span>
+                <b>{r.label}</b> <small className="muted-s">{r.hint}</small>
+              </span>
+            </label>
+            <div className="row-action">
+              <input type="time" aria-label={`${r.label} time`} value={plan[r.key].time} disabled={!plan[r.key].on} onChange={(e) => e.target.value && set(r.key, { time: e.target.value })} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="row-action">
+        <button
+          className="btn primary"
+          disabled={!Object.values(plan).some((p) => p.on)}
+          onClick={() => {
+            downloadIcs(buildIcs(plan, getProgram(), todayKey()));
+            setMade(true);
+          }}
+        >
+          Download calendar file
+        </button>
+      </div>
+      {made && (
+        <p className="note" role="status">
+          Open the downloaded file. On iPhone choose Add All; on Android it opens in Google Calendar. Changing the times later? Download again, and delete the old “Life Dashboard” events first so they don’t double up.
+        </p>
+      )}
+    </section>
+  );
+}
 
 function Install() {
   const state = useInstall();
@@ -51,6 +112,7 @@ export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => v
       </header>
       <div className="settings">
         <Install />
+        <Reminders />
         <Programme />
         <Categories />
         <Rewards />
