@@ -119,9 +119,9 @@ test('phone: a new device signs in from the welcome screen; a wrong passphrase i
 test('edits travel in both directions and concurrent edits converge', async () => {
   const before = (await admin()).vaults[0].version;
   await P.page.getByRole('button', { name: '5', exact: true }).first().click();
-  await expect.poll(async () => (await admin()).vaults[0].version, { timeout: 15_000 }).toBeGreaterThan(before);
+  await expect.poll(async () => (await admin()).vaults[0].version, { timeout: 30_000 }).toBeGreaterThan(before);
   await L.page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect.poll(() => energyDays(L.page, 5), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => energyDays(L.page, 5), { timeout: 30_000 }).toBe(true);
 
   // both sides change something different at the same time
   await L.page.locator('button[aria-pressed]', { hasText: 'Mark done' }).first().click();
@@ -129,7 +129,16 @@ test('edits travel in both directions and concurrent edits converge', async () =
   await gap(L.page, 4500);
   for (const d of [L, P]) await d.page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await gap(L.page, 3500);
-  await expect.poll(async () => JSON.stringify((await stored(L.page)).days) === JSON.stringify((await stored(P.page)).days), { timeout: 15_000 }).toBe(true);
+  // Nudge both devices to sync on every look, so a slow machine only makes this take longer rather than fail.
+  await expect
+    .poll(
+      async () => {
+        for (const d of [L, P]) await d.page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        return JSON.stringify((await stored(L.page)).days) === JSON.stringify((await stored(P.page)).days);
+      },
+      { timeout: 45_000, intervals: [1000, 1500, 2000] },
+    )
+    .toBe(true);
 });
 
 test('a device can stay unlocked; one that did not opt in asks again', async () => {

@@ -42,7 +42,7 @@ ul, ol { list-style: none; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .brand, .rail-foot { display: none; }
-.rail nav { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.rail nav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 10px 0 8px; background: none; border: 0; color: var(--faint); font-size: 13px;
@@ -572,3 +572,55 @@ table.mini tr.dim td { color: var(--muted); }
   .rem-row { grid-template-columns: 1fr auto; }
   .rem-row .row-action { grid-column: auto; }
 }
+.forecasts .fc-conf { justify-self: start; font-size: 12px; letter-spacing: .02em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.forecasts .fc-conf.conf-high { color: var(--plate-green); border-color: var(--plate-green); }
+.forecasts .fc-track { font-style: italic; }
+.fan { width: 100%; max-width: 420px; height: auto; margin: 6px 0 2px; }
+.fan-band { fill: var(--plate-blue); opacity: .18; stroke: none; }
+.fan-hist { fill: none; stroke: var(--chalk); stroke-width: 1.5; }
+.fan-dot { fill: var(--chalk); }
+.fan-mid { fill: none; stroke: var(--plate-blue); stroke-width: 2; stroke-dasharray: 5 4; }
+.fan-end { fill: var(--plate-blue); }
+.fan-goal { stroke: var(--plate-yellow); stroke-width: 1; stroke-dasharray: 2 3; }
+.fan-text { fill: var(--muted); font-size: 10px; font-family: var(--body, inherit); }
+
+/* Touch screens: comfortable tap targets, and form text of at least 16px so iPhones don't zoom in when a field is focused. */
+button, a, summary, select, label, input { touch-action: manipulation; }
+.boot, .app, .welcome { min-height: 100vh; min-height: 100dvh; }
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']), select, textarea { font-size: 16px; }
+  select { min-height: 40px; padding: 6px 10px; }
+  .link-btn { min-height: 44px; padding: 0 6px; display: inline-flex; align-items: center; }
+  summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+  .btn { min-height: 44px; }
+  .segment.small button { min-height: 44px; }
+  .check { min-height: 44px; }
+  .check input { width: 22px; height: 22px; }
+  .txn .btn { min-height: 44px; min-width: 44px; padding: 4px 10px; }
+}
+textarea { font: inherit; color: inherit; background: var(--steel-2); border: 1px solid var(--steel-3); border-radius: 8px; padding: 8px 10px; min-width: 0; resize: vertical; }
+textarea:focus-visible { outline-offset: 0; border-color: var(--chalk); }
+.modal ol + .btn, .modal ol + label, .modal ol + .field { margin-top: 12px; }
+/* On a phone the import review shows each entry as a small card, so Type and Category are never off-screen. */
+@media (max-width: 560px) {
+  .table-wrap.stack { overflow: visible; border: 0; }
+  .stack table.review, .stack table.review tbody { display: block; }
+  .stack table.review thead { display: none; }
+  .stack table.review tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; padding: 12px; margin-bottom: 8px; background: var(--steel-1); border: 1px solid var(--steel-3); border-radius: 8px; }
+  .stack table.review td { border: 0; padding: 0; white-space: normal; min-width: 0; max-width: none; }
+  .stack table.review td:nth-child(1) { color: var(--muted); grid-column: 1; grid-row: 1; }
+  .stack table.review td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .stack table.review td:nth-child(3) { grid-column: 2; grid-row: 1; text-align: right; font-weight: 600; }
+  .stack table.review td:nth-child(4) { grid-column: 1; grid-row: 3; }
+  .stack table.review td:nth-child(5) { grid-column: 2; grid-row: 3; }
+  .stack table.review td select { width: 100%; }
+}
+
+/* Wider fallback fonts or long labels must never push a screen past the phone's edge. */
+.nav-btn { min-width: 0; }
+.nav-btn span { max-width: 100%; overflow: hidden; }
+.topbar { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+.app { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .app { grid-template-columns: 224px minmax(0, 1fr); } }
+.main, .page, .settings, .settings > .panel { min-width: 0; }
+.settings { grid-template-columns: minmax(0, 1fr); }

@@ -1,8 +1,23 @@
-import { weeklyRepTotals, weightTrend, suggestedPace } from './derive';
+import { weeklyRepTotals, suggestedPace } from './derive';
+import { backtestWeight, predictAt, savingPaces, shipPaces, weightConfidence, weightFit } from './projection';
+import type { Confidence } from './projection';
 import { monthlySavingPace, naira, survivalTarget, fundBalance, DAYS_PER_MONTH } from './money';
 import { goalForecast } from './career';
 import type { AppData } from './types';
 import { addDays, dayNumber, fmtShort, mondayOf, round1 } from './utils';
+
+/** A picture of a forecast: what happened so far, and where it could go. Both axes are plain numbers; `xLabel` turns an x into text. */
+export interface FanChartData {
+  unit: string;
+  history: { x: number; y: number }[];
+  /** The likely path, and the edges of the range around it. */
+  mid: { x: number; y: number }[];
+  low: { x: number; y: number }[];
+  high: { x: number; y: number }[];
+  goal: number | null;
+  /** What each x means, for the axis ends, e.g. a date. */
+  xLabel: (x: number) => string;
+}
 
 export interface Forecast {
   id: 'weight' | 'fund' | 'portfolio' | 'strength';
@@ -10,33 +25,45 @@ export interface Forecast {
   headline: string;
   detail: string;
   tone: 'good' | 'warn' | 'info';
+  /** How much history the estimate stands on. Absent when there is no estimate yet. */
+  confidence?: Confidence;
+  /** How past forecasts of this kind held up, when there is enough history to check. */
+  trackRecord?: string;
+  chart?: FanChartData;
 }
+
+export const CONFIDENCE_WORD: Record<Confidence, string> = { low: 'Early estimate', medium: 'Fair estimate', high: 'Steady history' };
 
 const monthsWord = (m: number) => (m < 1.5 ? 'about a month' : `about ${Math.round(m)} months`);
 
 export function weightForecast(data: AppData): Forecast {
   const title = 'Bodyweight';
-  const trend = weightTrend(data.body);
-  if (!trend) return { id: 'weight', title, headline: 'Needs three weigh-ins', detail: `You have ${data.body.length}. Weigh in weekly and a trend line appears after the third.`, tone: 'info' };
+  const wf = weightFit(data.body);
+  if (!wf) return { id: 'weight', title, headline: 'Needs three weigh-ins', detail: `You have ${data.body.length}. Weigh in weekly and a trend line appears after the third.`, tone: 'info' };
 
-  const recent = data.body.slice(-6);
-  const last = recent[recent.length - 1];
-  const base = trend.fitAt(last.date);
-  const resid = recent.map((e) => e.weight - trend.fitAt(e.date));
-  const sd = Math.sqrt(resid.reduce((n, r) => n + r * r, 0) / Math.max(1, recent.length - 2));
-  const band = Math.max(0.4, 1.5 * sd);
-  const at = (weeks: number) => base + trend.slope * weeks;
+  const { fit, last } = wf;
+  const lastWeek = dayNumber(last.date) / 7;
+  const slope = fit.slope;
   const pace = suggestedPace(last.weight);
   const goal = data.goalWeight;
+  const confidence = weightConfidence(wf);
+  const base = predictAt(fit, lastWeek).mid;
+  const ahead = predictAt(fit, lastWeek + 12, 0.4);
 
-  let detail = `The line is moving ${trend.slope >= 0 ? 'up' : 'down'} ${Math.abs(trend.slope).toFixed(2)} kg a week. A usual lean-gain pace for your weight is ${pace.low.toFixed(2)} to ${pace.high.toFixed(2)} kg a week. This is a simple trend line through your last ${recent.length} weigh-ins, not a prediction of how your body will respond.`;
+  let detail = `The line is moving ${slope >= 0 ? 'up' : 'down'} ${Math.abs(slope).toFixed(2)} kg a week. A usual lean-gain pace for your weight is ${pace.low.toFixed(2)} to ${pace.high.toFixed(2)} kg a week. This is a straight line through your last ${fit.n} weigh-ins, and the range is wider the fewer weigh-ins and the more they bounce around. It is not a prediction of how your body will respond.`;
   let tone: Forecast['tone'] = 'info';
-  if (trend.slope >= pace.low && trend.slope <= pace.high) tone = 'good';
-  else if (trend.slope < pace.low * 0.5) tone = 'warn';
+  if (slope >= pace.low && slope <= pace.high) tone = 'good';
+  else if (slope < pace.low * 0.5) tone = 'warn';
   if (goal != null) {
-    if (goal > base && trend.slope > 0.01) {
-      const weeks = (goal - base) / trend.slope;
-      detail += weeks > 104 ? ` Reaching ${goal} kg would take over two years at this pace.` : ` Reaching ${goal} kg would take about ${Math.round(weeks)} weeks at this pace.`;
+    if (goal > base && slope > 0.01) {
+      const weeks = (goal - base) / slope;
+      // Quickest and slowest the goal could plausibly arrive, from the range of the slope itself.
+      const se = fit.s / Math.sqrt(fit.sxx);
+      const t = 1.5;
+      const fast = (goal - base) / (slope + t * se);
+      const slow = slope - t * se > 0.01 ? (goal - base) / (slope - t * se) : Infinity;
+      const spread = slow === Infinity ? `, and it could be much longer if the trend flattens` : fast >= 1 ? `, anywhere from ${Math.round(fast)} to ${Math.round(slow)} weeks` : '';
+      detail += weeks > 104 ? ` Reaching ${goal} kg would take over two years at this pace.` : ` Reaching ${goal} kg would take about ${Math.round(weeks)} weeks at this pace${weeks <= 104 ? spread : ''}.`;
     } else if (goal > base) {
       detail += ` At this pace you would not reach ${goal} kg, because the line is flat or falling.`;
       tone = 'warn';
@@ -44,8 +71,29 @@ export function weightForecast(data: AppData): Forecast {
       detail += ` You are at or past your ${goal} kg goal.`;
     }
   }
-  return { id: 'weight', title, headline: `About ${round1(at(12))} kg in 12 weeks (likely ${round1(at(12) - band)} to ${round1(at(12) + band)})`, detail, tone };
+
+  const bt = backtestWeight(data.body);
+  const trackRecord = bt ? `Replaying your history, forecasts like this missed by about ${bt.mae.toFixed(1)} kg on average (${bt.n} checked), and ${Math.round(bt.inside * 100)}% of weigh-ins landed inside the range.` : undefined;
+
+  const pts = (f: (w: number) => number) => [0, 4, 8, 12].map((w) => ({ x: lastWeek + w, y: f(w) }));
+  const hist = data.body.slice(-12).map((e) => ({ x: dayNumber(e.date) / 7, y: e.weight }));
+  const chart: FanChartData = {
+    unit: 'kg',
+    history: hist,
+    mid: pts((w) => predictAt(fit, lastWeek + w, 0.4).mid),
+    low: pts((w) => predictAt(fit, lastWeek + w, 0.4).low),
+    high: pts((w) => predictAt(fit, lastWeek + w, 0.4).high),
+    goal,
+    xLabel: (x) => fmtShort(addDays('1970-01-01', Math.round(x * 7))),
+  };
+  return { id: 'weight', title, headline: `About ${round1(ahead.mid)} kg in 12 weeks (likely ${round1(ahead.low)} to ${round1(ahead.high)})`, detail, tone, confidence, trackRecord, chart };
 }
+
+const monthYear = (key: string) => {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+};
+const monthsRange = (a: number, b: number) => (Math.round(a) === Math.round(b) ? monthsWord(a) : `${Math.max(1, Math.round(a))} to ${Math.round(b)} months`);
 
 export function fundForecast(data: AppData, today: string): Forecast {
   const title = 'Survival fund';
@@ -53,18 +101,38 @@ export function fundForecast(data: AppData, today: string): Forecast {
   if (target == null) return { id: 'fund', title, headline: 'No target yet', detail: 'Enter a rough spend per day on the Money screen, or log about four weeks of spending.', tone: 'info' };
   const balance = fundBalance(data, 'survival');
   if (balance >= target) return { id: 'fund', title, headline: 'Complete', detail: `${naira(balance)} covers six months of spending. New savings go to the investment fund.`, tone: 'good' };
-  const pace = monthlySavingPace(data, today);
-  if (pace <= 0) return { id: 'fund', title, headline: 'No savings in the last 8 weeks', detail: `${naira(balance)} of ${naira(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
-  const months = (target - balance) / pace;
-  const when = addDays(today, Math.round(months * DAYS_PER_MONTH));
-  const [y, m] = when.split('-').map(Number);
-  const monthName = new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const paces = savingPaces(data, today);
+  const typical = monthlySavingPace(data, today);
+  if (typical <= 0 && paces.typical <= 0) return { id: 'fund', title, headline: 'No savings in the last 8 weeks', detail: `${naira(balance)} of ${naira(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
+
+  const need = target - balance;
+  const mid = need / (typical > 0 ? typical : paces.typical);
+  const quick = paces.fast > 0 ? need / paces.fast : mid;
+  const slowM = paces.slow > 0 ? need / paces.slow : Infinity;
+  const when = addDays(today, Math.round(mid * DAYS_PER_MONTH));
+  const range = slowM === Infinity ? `Some recent stretches had no savings, so it could be quicker or much slower.` : `It could take ${monthsRange(quick, slowM)}, depending on whether the next weeks look like your quickest or your slowest recent stretches.`;
+  const stretches = paces.confidence === 'low' ? 'Only a few weeks of history, so treat the range as a rough guide.' : `Range from ${paces.windows} four-week stretches.`;
+
+  const monthX = (m: number) => dayNumber(today) + m * DAYS_PER_MONTH;
+  const horizon = Math.min(60, Math.max(3, Math.ceil(Math.min(slowM === Infinity ? mid * 2 : slowM, mid * 2.5))));
+  const line = (rate: number) => [0, horizon / 3, (2 * horizon) / 3, horizon].map((m) => ({ x: monthX(m), y: Math.min(target * 1.05, balance + rate * m) }));
+  const chart: FanChartData = {
+    unit: '₦',
+    history: [{ x: monthX(0), y: balance }],
+    mid: line(typical > 0 ? typical : paces.typical),
+    low: line(Math.max(0, paces.slow)),
+    high: line(Math.max(paces.fast, typical)),
+    goal: target,
+    xLabel: (x) => monthYear(addDays('1970-01-01', Math.round(x))).replace(/^(\w{3})\w* /, '$1 '),
+  };
   return {
     id: 'fund',
     title,
-    headline: `${monthsWord(months)} to go (around ${monthName})`,
-    detail: `${naira(balance)} of ${naira(target)}, saving about ${naira(pace)} a month over the last 8 weeks. Irregular income means this will move around.`,
-    tone: months > 36 ? 'warn' : 'info',
+    headline: `${monthsWord(mid)} to go (around ${monthYear(when)})`,
+    detail: `${naira(balance)} of ${naira(target)}, saving about ${naira(typical > 0 ? typical : paces.typical)} a month over the last 8 weeks. ${range} ${stretches} Irregular income means this will move around.`,
+    tone: mid > 36 ? 'warn' : 'info',
+    confidence: paces.confidence,
+    chart,
   };
 }
 
@@ -79,12 +147,18 @@ export function portfolioForecast(data: AppData, today: string): Forecast {
   const weeksToFinish = fc.remaining * (fc.actualWeeksEach ?? 0);
   const finish = addDays(today, Math.round(weeksToFinish * 7));
   const lateDays = dayNumber(finish) - dayNumber(c.deadline);
+  const sp = shipPaces(data);
+  // The range scales the headline estimate by how much faster or slower the person's quickest and slowest projects were than their average.
+  const quick = sp ? Math.min(1, sp.fast / sp.typical) : 1;
+  const slow = sp ? Math.max(1, sp.slow / sp.typical) : 1;
+  const spread = sp ? ` With the spread in how long your projects have taken, finishing could fall between ${fmtShort(addDays(today, Math.round(weeksToFinish * quick * 7)))} and ${fmtShort(addDays(today, Math.round(weeksToFinish * slow * 7)))}.` : '';
   return {
     id: 'portfolio',
     title,
     headline: lateDays <= 0 ? `On pace, finishing around ${fmtShort(finish)}` : `Behind pace by about ${Math.max(1, Math.round(lateDays / 7))} weeks`,
-    detail: `${fc.shipped} of ${c.goalCount} shipped, one every ${Math.max(1, Math.round(fc.actualWeeksEach ?? 0))} weeks so far. Finishing by ${fmtShort(c.deadline)} needs one about every ${Math.max(1, Math.round(fc.neededWeeksEach))} weeks.`,
+    detail: `${fc.shipped} of ${c.goalCount} shipped, one every ${Math.max(1, Math.round(fc.actualWeeksEach ?? 0))} weeks so far. Finishing by ${fmtShort(c.deadline)} needs one about every ${Math.max(1, Math.round(fc.neededWeeksEach))} weeks.${spread}`,
     tone: lateDays <= 0 ? 'good' : 'warn',
+    confidence: sp?.confidence ?? 'low',
   };
 }
 
@@ -112,6 +186,7 @@ export function strengthForecast(data: AppData, today: string): Forecast {
     headline: `Weekly reps are ${dir}${dir === 'flat' ? '' : `, about ${Math.round(Math.abs(slope))} a week`}`,
     detail: `Based on ${weeks.length} finished weeks. More reps at the same load means you are getting stronger; when every set reaches the top of its range, add load.`,
     tone: dir === 'rising' ? 'good' : dir === 'falling' ? 'warn' : 'info',
+    confidence: weeks.length >= 6 ? 'high' : weeks.length >= 4 ? 'medium' : 'low',
   };
 }
 

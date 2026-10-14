@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.16)
+# Personal Life Dashboard — Product Spec (v0.18)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -106,7 +106,7 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - Only a numbers-only summary is sent (no notes, names, project or repo titles, GitHub username, treat names). Per-area share toggles and a "show exactly what gets sent" preview.
 - Billing is through an Anthropic Console account (separate from a Claude app plan). Use a key with a low spend limit.
 - Not yet verified against the live API (the build sandbox could not reach it). If calls from a saved file are blocked by the browser, host the page or add a small proxy.
-- ML forecasting (phase 2) is still future work; current forecasts are simple trend lines.
+- Forecasts show a range, a confidence label and (for weight) a back-test of past accuracy (section 23). Machine-learning forecasting is not planned until there is real multi-user data to learn from.
 
 ## 9. Month schedule (built)
 - Month tab: Monday-first calendar with the push/pull/legs days, four-plate dots for past days, reward-block end and goal deadline markers, and month totals (sessions, strong days, bills and income still due).
@@ -167,8 +167,8 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 110 unit tests (incl. the statement importer and reminders) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 46 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 125 unit tests (incl. the statement importer, reminders and forecasting) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 54 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -202,3 +202,19 @@ Sync and backup → "Delete my account" removes the sign-in and the encrypted co
 **Getting-started checklist** on Today for new people: first plate, a money entry, a project or GitHub, reminders, install (left out where installing is impossible) and backup. Each step ticks itself from what the person has really done, has a button that goes to the right place, and the whole card can be hidden (remembered per device). It never shows in the demo or on sample data.
 
 **Reminders** (Settings): daily check-in, training days (from the person's own programme), spending log, weekly review, each with its own time. The app makes a calendar file (`.ics`) with repeating events and an alert on each, which the person adds to their phone's calendar. The calendar then does the reminding with the app closed, and nothing is sent to any server. Times are "floating", so they stay at the same clock time when travelling. Not built: true push notifications. Those need a server that holds each person's push subscription and sends on a schedule (and the content security policy and service worker would need extending), so they only make sense once there are real users.
+
+## 23. Forecasting with honest ranges
+
+The Advisor's "Where you're heading" now shows how sure each estimate is, not just a single number. All of it is plain arithmetic on the person's own logs (`src/projection.ts`); nothing leaves the device.
+- **Bodyweight:** a straight line through the last six weigh-ins with an 80% prediction range that widens further ahead, with fewer points, and with noisier weigh-ins (small samples use a wider multiplier). The weeks to a goal weight come as a spread, not one number. **Back-test:** the app replays the person's history, forecasts each later weigh-in using only what was known then, and reports the average miss in kg and how often reality landed inside the range. Shown only once there are enough weigh-ins to check.
+- **Survival fund:** slow, typical and fast monthly saving paces from rolling four-week stretches of the last twelve weeks (weeks before logging began are not counted as zero). The time to the target is a range, with a fan chart. With under three stretches of history the range is a deliberately wide ±40-60% and labelled an early estimate.
+- **Portfolio:** if projects have ship dates, the finish date is a range that scales the headline estimate by how much faster or slower the person's quickest and slowest projects were.
+- **Confidence labels** (early / fair / steady history) come from how much history there is, never from how good the news is.
+- The AI advisor still receives only the numeric headline of each forecast, no free text.
+- Not done: seasonality, income-aware savings forecasts, and anything that learns across people.
+
+## 24. Phone checks
+
+`e2e/mobile.spec.ts` runs with touch at 320×568 (smallest common phone), 390×844 and 844×390 (on its side): every screen has no sideways scroll, the bottom bar buttons are all on screen, no text box is under 16px (iPhones zoom the page when such a box is focused), and a statement can be imported with taps from start to finish. It also simulates the browser's install offer (the Install button appears, asks the browser to install, then reads "Already installed") and checks that an iPhone is told to use Safari's Add to Home Screen.
+
+**What this cannot prove** (it is Chromium pretending to be a phone): the real keyboard, the phone's file picker, the real install prompt, Safari's own behaviour, and how the calendar file opens on a given phone. Check these on a real phone once: install it, set reminders and open the downloaded calendar file, import a CSV from the Files app, and rotate the phone.

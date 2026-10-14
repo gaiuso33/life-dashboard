@@ -2,6 +2,7 @@
   "name": "Life Dashboard",
   "short_name": "Dashboard",
   "description": "Training, money, career and daily habits in one place.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
