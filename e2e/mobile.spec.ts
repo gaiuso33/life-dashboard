@@ -12,6 +12,15 @@ const SIZES = [
 
 const settle = (p: Page) => p.waitForTimeout(300);
 const overflow = (p: Page) => p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+/** Names the elements poking out past the right edge, so a failure says what to fix. */
+const pokingOut = (p: Page) =>
+  p.evaluate(() => {
+    const vw = document.documentElement.clientWidth;
+    return [...document.querySelectorAll('body *')]
+      .filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right > vw + 0.5 && !e.closest('.tabs'); })
+      .slice(0, 8)
+      .map((e) => `${e.tagName.toLowerCase()}.${String(e.className).slice(0, 40)} right=${Math.round(e.getBoundingClientRect().right)} "${(e.textContent ?? '').trim().slice(0, 24)}"`);
+  });
 const offscreen = (p: Page, selector: string) =>
   p.evaluate((sel) => {
     const vw = document.documentElement.clientWidth;
@@ -39,13 +48,13 @@ for (const size of SIZES) {
     for (const t of TABS) {
       await page.getByRole('button', { name: t, exact: true }).first().tap();
       await settle(page);
-      expect(await overflow(page), `${t}: sideways scroll`).toBeLessThanOrEqual(0);
+      expect(await overflow(page), `${t}: sideways scroll by ${JSON.stringify(await pokingOut(page))}`).toBeLessThanOrEqual(0);
       expect(await zoomers(page), `${t}: small text boxes`).toEqual([]);
       if (!wide) expect(await offscreen(page, '.nav-btn'), `${t}: bottom bar buttons cut off`).toEqual([]);
     }
     await page.getByRole('button', { name: 'Settings' }).first().tap();
     await settle(page);
-    expect(await overflow(page), 'Settings: sideways scroll').toBeLessThanOrEqual(0);
+    expect(await overflow(page), `Settings: sideways scroll by ${JSON.stringify(await pokingOut(page))}`).toBeLessThanOrEqual(0);
     expect(await zoomers(page), 'Settings: small text boxes').toEqual([]);
     expect(errors).toEqual([]);
     await ctx.close();
@@ -72,6 +81,23 @@ for (const size of SIZES) {
     await ctx.close();
   });
 }
+
+// Different machines render the same font a little wider, and some phones fall back to a wider one. Spreading every letter apart stands in
+// for that on any machine, so a row that only just fits is caught here instead of on someone's phone.
+test('320x568 small phone: nothing is pushed off screen when text renders wider', async ({ browser }) => {
+  const ctx = await newContext(browser, { viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  await page.goto(APP);
+  await setUpEmptyDashboard(page);
+  await page.addStyleTag({ content: '* { letter-spacing: 0.06em !important; }' });
+  for (const t of [...TABS, 'Settings']) {
+    await page.getByRole('button', { name: t, exact: true }).first().tap();
+    await settle(page);
+    expect(await overflow(page), `${t}: sideways scroll with wider text`).toBeLessThanOrEqual(0);
+    expect(await offscreen(page, '.nav-btn'), `${t}: bottom bar buttons cut off with wider text`).toEqual([]);
+  }
+  await ctx.close();
+});
 
 test('install: the button appears when the browser offers it, asks the browser to install, and explains itself when it does not', async ({ browser }) => {
   const ctx = await newContext(browser, { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });

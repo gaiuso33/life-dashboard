@@ -42,7 +42,7 @@ ul, ol { list-style: none; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .brand, .rail-foot { display: none; }
-.rail nav { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.rail nav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 .nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 10px 0 8px; background: none; border: 0; color: var(--faint); font-size: 13px;
@@ -615,3 +615,12 @@ textarea:focus-visible { outline-offset: 0; border-color: var(--chalk); }
   .stack table.review td:nth-child(5) { grid-column: 2; grid-row: 3; }
   .stack table.review td select { width: 100%; }
 }
+
+/* Wider fallback fonts or long labels must never push a screen past the phone's edge. */
+.nav-btn { min-width: 0; }
+.nav-btn span { max-width: 100%; overflow: hidden; }
+.topbar { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+.app { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .app { grid-template-columns: 224px minmax(0, 1fr); } }
+.main, .page, .settings, .settings > .panel { min-width: 0; }
+.settings { grid-template-columns: minmax(0, 1fr); }
