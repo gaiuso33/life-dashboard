@@ -3,6 +3,7 @@ import { commitStats, loggedSpendDays, plural, readyExercises, repsInWeek, sumTx
 import { commitStreak } from './career';
 import { weekStreak, weeklyRepTotals, weightTrend, suggestedPace } from './derive';
 import { forecasts } from './forecast';
+import { activePrefs, currencyName, toDisplay, toDisplayExact, weightUnit } from './units';
 import { CATEGORIES, avgMonthlySpend, fundBalance, monthTotals, monthlySavingPace, survivalTarget } from './money';
 import { MEASURES } from './program';
 import { plansBetween } from './plan';
@@ -29,7 +30,7 @@ const r = round1;
 export function buildSummary(data: AppData, today: string, share: Record<ShareArea, boolean>): Summary {
   const monday = mondayOf(today);
   const prevMonday = addDays(monday, -7);
-  const out: Summary = { asOf: today, weekday: weekdayName(today), currency: 'NGN (Nigerian naira)', weekStartsOn: monday };
+  const out: Summary = { asOf: today, weekday: weekdayName(today), currency: `${activePrefs().currency} (${currencyName(activePrefs().currency)})`, weightUnit: weightUnit(), weekStartsOn: monday };
   const fc = forecasts(data, today);
 
   if (share.training) {
@@ -61,11 +62,11 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
     }
     out.body = {
       goal: 'gain muscle mass and strength, and improve mobility',
-      latestWeightKg: latest?.weight ?? null,
-      goalWeightKg: data.goalWeight,
-      weighInsLast8: data.body.slice(-8).map((e) => ({ daysAgo: dayNumber(today) - dayNumber(e.date), kg: e.weight })),
-      trendKgPerWeek: trend ? Math.round(trend.slope * 100) / 100 : null,
-      usualLeanGainRangeKgPerWeek: latest ? [Math.round(suggestedPace(latest.weight).low * 100) / 100, Math.round(suggestedPace(latest.weight).high * 100) / 100] : null,
+      latestWeight: latest ? toDisplay(latest.weight) : null,
+      goalWeight: data.goalWeight == null ? null : toDisplay(data.goalWeight),
+      weighInsLast8: data.body.slice(-8).map((e) => ({ daysAgo: dayNumber(today) - dayNumber(e.date), weight: toDisplay(e.weight) })),
+      trendPerWeek: trend ? Math.round(toDisplayExact(trend.slope) * 100) / 100 : null,
+      usualLeanGainRangePerWeek: latest ? [Math.round(toDisplayExact(suggestedPace(latest.weight).low) * 100) / 100, Math.round(toDisplayExact(suggestedPace(latest.weight).high) * 100) / 100] : null,
       measurementChangeCmSinceFirst: changes,
       weightForecast: fc.find((f) => f.id === 'weight')?.headline,
     };
@@ -78,8 +79,8 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
     out.money = {
       plannedNext14Days: {
         items: ahead.length,
-        billsNaira: ahead.filter((o) => o.item.kind === 'bill').reduce((n, o) => n + o.item.amount, 0),
-        incomeNaira: ahead.filter((o) => o.item.kind === 'income').reduce((n, o) => n + o.item.amount, 0),
+        billsDue: ahead.filter((o) => o.item.kind === 'bill').reduce((n, o) => n + o.item.amount, 0),
+        incomeDue: ahead.filter((o) => o.item.kind === 'income').reduce((n, o) => n + o.item.amount, 0),
       },
       spentThisWeek: sumTxns(data, 'expense', monday, today),
       spentLastWeek: sumTxns(data, 'expense', prevMonday, addDays(monday, -1)),
@@ -127,7 +128,7 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
       badgesEarned: states.filter((b) => b.earned).length,
       badgesTotal: states.length,
       weeklyReward: { requirements: wk.reqs.map((q) => `${q.label} ${q.value}/${q.target}`), unlocked: wk.unlocked, claimed: !!wk.claim },
-      treatsSpentThisMonthNaira: data.rewards.claims.filter((c) => c.date.startsWith(today.slice(0, 7))).reduce((n, c) => n + c.cost, 0),
+      treatsSpentThisMonth: data.rewards.claims.filter((c) => c.date.startsWith(today.slice(0, 7))).reduce((n, c) => n + c.cost, 0),
     };
   }
   return out;

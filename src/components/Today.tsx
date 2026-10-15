@@ -8,11 +8,12 @@ import { useStore } from '../store';
 import type { DayLog } from '../types';
 import { WEEKDAYS } from '../dates';
 import { commitsOn } from '../career';
-import { CATALOG } from '../badges';
-import { naira, txnsOn } from '../money';
+import { CATALOG, localizedBadge } from '../badges';
+import {txnsOn} from '../money';
 import { periodsFor } from '../rewards';
 import { dailyNudges } from '../coach';
 import { addDays, fmtLong, fmtShort, mondayOf, todayKey, weekdayName } from '../utils';
+import { fmtMoney } from '../units';
 
 const colorOf = (k: ItemKey) => ITEMS.find((i) => i.key === k)!.color;
 
@@ -47,7 +48,7 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
   const spentTotal = spentToday.reduce((n, t) => n + t.amount, 0);
   const wk = periodsFor(data, 'week', today);
   const latestBadge = Object.entries(data.rewards.badges).sort((a, b) => b[1].localeCompare(a[1]))[0];
-  const latestDef = latestBadge ? CATALOG.find((b) => b.id === latestBadge[0]) : undefined;
+  const latestDef = latestBadge ? (() => { const b = CATALOG.find((x) => x.id === latestBadge[0]); return b ? localizedBadge(b) : undefined; })() : undefined;
   const commitsToday = commitsOn(data.career, today);
   const streak = dayStreak(data, today);
   const wStreak = weekStreak(data, today);
@@ -137,7 +138,7 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
             <Row
               k="money"
               title="Log today’s spending"
-              detail={spentToday.length ? `${naira(spentTotal)} across ${spentToday.length} ${spentToday.length === 1 ? 'entry' : 'entries'}.` : log.money ? 'Marked as no spending today.' : 'Even a rough total counts.'}
+              detail={spentToday.length ? `${fmtMoney(spentTotal)} across ${spentToday.length} ${spentToday.length === 1 ? 'entry' : 'entries'}.` : log.money ? 'Marked as no spending today.' : 'Even a rough total counts.'}
               done={status.money}
             >
               {!spentToday.length && (

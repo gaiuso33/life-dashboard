@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useS
 import type { ReactNode } from 'react';
 import type { DayDef, DayKey } from './program';
 import { setActiveProgram } from './program';
+import { resolvePrefs, setActivePrefs } from './units';
+import type { Prefs } from './units';
 import { stampChanges } from './scalars';
 import { categoriesOf } from './money';
 import { LocalRepository } from './repository';
@@ -21,6 +23,7 @@ type Action =
   | { t: 'finish'; date: string; day: DayKey; finished: boolean }
   | { t: 'body'; entry: BodyEntry }
   | { t: 'goal'; value: number | null }
+  | { t: 'prefs'; value: Prefs }
   | { t: 'txn-add'; txn: Txn }
   | { t: 'txn-import'; txns: Txn[] }
   | { t: 'txn-del'; id: string }
@@ -96,6 +99,8 @@ function apply(state: AppData, a: Action): AppData {
     }
     case 'goal':
       return { ...state, goalWeight: a.value };
+    case 'prefs':
+      return { ...state, prefs: a.value };
     case 'txn-add':
       return { ...state, money: { ...state.money, txns: [...state.money.txns, a.txn] } };
     case 'txn-import': {
@@ -239,6 +244,7 @@ export function StoreProvider({ children, repo }: { children: ReactNode; repo?: 
 
   // The programme is read through plain functions all over the app, so it is set from the data before anything renders.
   setActiveProgram(data.program);
+  setActivePrefs(resolvePrefs(data));
 
   const latest = useRef(data);
   latest.current = data;

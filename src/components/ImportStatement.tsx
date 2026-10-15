@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { categoriesOf, naira } from '../money';
+import {categoriesOf} from '../money';
 import { buildRows, detectDateOrder, findHeaderRow, guessMapping, mappingProblem, NONE, parseCsv, planImport } from '../statement';
 import type { DateOrder, ImportRow, Mapping, RowKind } from '../statement';
 import { useStore } from '../store';
 import { fmtShort, todayKey } from '../utils';
+import { fmtMoney } from '../units';
 
 const MAX_BYTES = 5_000_000;
 const SHOWN = 60;
@@ -227,7 +228,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                 <b>{plan.add.length}</b> new entr{plan.add.length === 1 ? 'y' : 'ies'}{range ? `, ${fmtShort(range.from)} to ${fmtShort(range.to)}` : ''}
               </p>
               <p className="note first">
-                Spent {naira(totals.expense)} · Received {naira(totals.income)} · Saved {naira(totals.saving)}
+                Spent {fmtMoney(totals.expense)} · Received {fmtMoney(totals.income)} · Saved {fmtMoney(totals.saving)}
               </p>
               {plan.duplicates > 0 && <p className="note first">{plan.duplicates} already imported before, so they’re skipped.</p>}
               {plan.removedEarlier > 0 && <p className="note first">{plan.removedEarlier} you removed earlier stay removed.</p>}
@@ -252,7 +253,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                     <tr key={i} role="row" className={r.kind === 'skip' ? 'dim' : undefined}>
                       <td role="cell">{fmtShort(r.date)}</td>
                       <td role="cell">{r.note || <span className="muted-s">No description</span>}</td>
-                      <td role="cell" className="num">{r.direction === 'out' ? '−' : '+'}{naira(r.amount)}</td>
+                      <td role="cell" className="num">{r.direction === 'out' ? '−' : '+'}{fmtMoney(r.amount)}</td>
                       <td role="cell">
                         <select value={r.kind} aria-label={`Type for ${r.note || 'entry'} on ${r.date}`} onChange={(e) => edit(i, { kind: e.target.value as RowKind })}>
                           {(Object.keys(KIND_LABEL) as RowKind[]).map((k) => (

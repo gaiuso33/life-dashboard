@@ -2,8 +2,7 @@ import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { BarChart } from '../Charts';
 import type { Bar } from '../Charts';
-import {
-  categoriesOf,
+import {categoriesOf,
   DAYS_PER_MONTH,
   HISTORY_NEEDED,
   compact,
@@ -11,7 +10,6 @@ import {
   lastCategoryForNote,
   monthTotals,
   monthlySavingPace,
-  naira,
   newId,
   spendByWeek,
   suggestedSave,
@@ -21,6 +19,8 @@ import { ImportStatement } from './ImportStatement';
 import { useStore } from '../store';
 import type { FundKey, TxnKind } from '../types';
 import { addDays, fmtShort, todayKey } from '../utils';
+import { fmtMoney } from '../units';
+import { currencySymbol, fmtNumber } from '../units';
 
 const KINDS: { key: TxnKind; label: string }[] = [
   { key: 'expense', label: 'Spent' },
@@ -29,7 +29,7 @@ const KINDS: { key: TxnKind; label: string }[] = [
 ];
 
 const digits = (s: string) => s.replace(/\D/g, '').slice(0, 9);
-const grouped = (d: string) => (d ? Number(d).toLocaleString('en-NG') : '');
+const grouped = (d: string) => (d ? fmtNumber(Number(d)) : '');
 
 export function Money() {
   const { data, dispatch } = useStore();
@@ -82,7 +82,7 @@ export function Money() {
     });
     if (kind === 'income') setSplit({ income: value, amount: suggestedSave(value, money.savePct) });
     else setSplit(null);
-    setFlash(`${KINDS.find((k) => k.key === kind)!.label} ${naira(value)} logged.`);
+    setFlash(`${KINDS.find((k) => k.key === kind)!.label} ${fmtMoney(value)} logged.`);
     setAmount('');
     setNote('');
     setDate(today);
@@ -91,7 +91,7 @@ export function Money() {
   const moveToSavings = () => {
     if (!split) return;
     dispatch({ t: 'txn-add', txn: { id: newId(), date: today, kind: 'saving', amount: split.amount, fund: activeFund, note: 'From income split' } });
-    setFlash(`Saved ${naira(split.amount)} to your ${activeFund} fund.`);
+    setFlash(`Saved ${fmtMoney(split.amount)} to your ${activeFund} fund.`);
     setSplit(null);
   };
 
@@ -103,7 +103,7 @@ export function Money() {
     else {
       const months = remaining / pace;
       const when = new Date(addDaysDate(today, Math.round(months * DAYS_PER_MONTH)));
-      eta = `At ${naira(pace)} saved a month, about ${months < 1.5 ? '1 month' : `${Math.round(months)} months`} to go (around ${when.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}).`;
+      eta = `At ${fmtMoney(pace)} saved a month, about ${months < 1.5 ? '1 month' : `${Math.round(months)} months`} to go (around ${when.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}).`;
     }
   }
 
@@ -130,8 +130,8 @@ export function Money() {
               <label className="field amount">
                 <span>Amount</span>
                 <div className="amount-box">
-                  <i aria-hidden="true">₦</i>
-                  <input inputMode="numeric" autoComplete="off" value={grouped(amount)} placeholder="0" onChange={(e) => setAmount(digits(e.target.value))} aria-label="Amount in naira" />
+                  <i aria-hidden="true">{currencySymbol()}</i>
+                  <input inputMode="numeric" autoComplete="off" value={grouped(amount)} placeholder="0" onChange={(e) => setAmount(digits(e.target.value))} aria-label="Amount" />
                 </div>
               </label>
 
@@ -183,11 +183,11 @@ export function Money() {
             {split && (
               <div className="callout" role="status">
                 <p>
-                  Income logged. Your {money.savePct}% split is <b>{naira(split.amount)}</b>. Move it into your {activeFund} fund now?
+                  Income logged. Your {money.savePct}% split is <b>{fmtMoney(split.amount)}</b>. Move it into your {activeFund} fund now?
                 </p>
                 <div className="row-action">
                   <button className="btn primary" onClick={moveToSavings}>
-                    Save {naira(split.amount)}
+                    Save {fmtMoney(split.amount)}
                   </button>
                   <button className="btn ghost" onClick={() => setSplit(null)}>
                     Not now
@@ -225,9 +225,9 @@ export function Money() {
                     </span>
                     <span className="txn-amt">
                       {t.kind === 'expense' ? '−' : t.kind === 'income' ? '+' : '→'}
-                      {naira(t.amount)}
+                      {fmtMoney(t.amount)}
                     </span>
-                    <button className="btn ghost" aria-label={`Remove ${t.note || 'entry'} of ${naira(t.amount)}`} onClick={() => dispatch({ t: 'txn-del', id: t.id })}>
+                    <button className="btn ghost" aria-label={`Remove ${t.note || 'entry'} of ${fmtMoney(t.amount)}`} onClick={() => dispatch({ t: 'txn-del', id: t.id })}>
                       Remove
                     </button>
                   </li>
@@ -241,8 +241,8 @@ export function Money() {
           <section className="panel">
             <h2>Survival fund</h2>
             <p className="big">
-              {naira(survivalNow)}
-              {survival.target != null && <small> of {naira(survival.target)}</small>}
+              {fmtMoney(survivalNow)}
+              {survival.target != null && <small> of {fmtMoney(survival.target)}</small>}
             </p>
             {survival.target != null && (
               <div className="meter-bar fund" role="progressbar" aria-label="Survival fund progress" aria-valuenow={Math.min(100, Math.round((survivalNow / survival.target) * 100))} aria-valuemin={0} aria-valuemax={100}>
@@ -255,10 +255,10 @@ export function Money() {
               </p>
             ) : survival.basis === 'estimate' ? (
               <p className="note">
-                Based on your rough estimate of {naira(money.dailyEstimate ?? 0)} a day (six months is {naira(survival.target)}). It switches to your real spending after {HISTORY_NEEDED} days of logging; you have {survival.daysTracked} so far.
+                Based on your rough estimate of {fmtMoney(money.dailyEstimate ?? 0)} a day (six months is {fmtMoney(survival.target)}). It switches to your real spending after {HISTORY_NEEDED} days of logging; you have {survival.daysTracked} so far.
               </p>
             ) : (
-              <p className="note">Six months of your average spending of {naira(survival.monthly ?? 0)} a month, from your last 90 days. Held in OPay.</p>
+              <p className="note">Six months of your average spending of {fmtMoney(survival.monthly ?? 0)} a month, from your last 90 days. Held in OPay.</p>
             )}
             {survivalDone ? <p className="ok">Survival fund complete. New savings now go to the investment fund.</p> : eta && <p className="note">{eta}</p>}
           </section>
@@ -266,7 +266,7 @@ export function Money() {
           <section className="panel">
             <h2>Investment fund</h2>
             {survivalDone || investNow > 0 ? (
-              <p className="big">{naira(investNow)}</p>
+              <p className="big">{fmtMoney(investNow)}</p>
             ) : (
               <p className="empty">Starts once the survival fund is full. Until then, every transfer goes to survival.</p>
             )}
@@ -277,15 +277,15 @@ export function Money() {
             <dl className="stats compact">
               <div>
                 <dt>Received</dt>
-                <dd className="money-num">{naira(month.income)}</dd>
+                <dd className="money-num">{fmtMoney(month.income)}</dd>
               </div>
               <div>
                 <dt>Spent</dt>
-                <dd className="money-num">{naira(month.spent)}</dd>
+                <dd className="money-num">{fmtMoney(month.spent)}</dd>
               </div>
               <div>
                 <dt>Saved</dt>
-                <dd className="money-num">{naira(month.saved)}</dd>
+                <dd className="money-num">{fmtMoney(month.saved)}</dd>
               </div>
             </dl>
             {cats.length > 0 ? (
@@ -296,7 +296,7 @@ export function Money() {
                     <span className="cb-track">
                       <i style={{ width: `${(v / topCat) * 100}%` }} />
                     </span>
-                    <span className="cb-val">{naira(v)}</span>
+                    <span className="cb-val">{fmtMoney(v)}</span>
                   </li>
                 ))}
               </ul>
@@ -309,7 +309,7 @@ export function Money() {
 
       <section className="panel">
         <h2>Spending per week</h2>
-        <BarChart bars={bars} color="var(--plate-yellow)" unit="₦" label="Total spending per week over the last eight weeks" fmtValue={naira} fmtTick={compact} />
+        <BarChart bars={bars} color="var(--plate-yellow)" unit={currencySymbol()} label="Total spending per week over the last eight weeks" fmtValue={fmtMoney} fmtTick={compact} />
       </section>
 
       <section className="panel">
@@ -324,7 +324,7 @@ export function Money() {
             />
           </label>
           <label className="field">
-            <span>Rough spend per day (₦)</span>
+            <span>Rough spend per day ({currencySymbol()})</span>
             <input
               inputMode="numeric"
               value={grouped(money.dailyEstimate != null ? String(money.dailyEstimate) : '')}
@@ -336,7 +336,7 @@ export function Money() {
             />
           </label>
           <label className="field">
-            <span>Already in survival fund (₦)</span>
+            <span>Already in survival fund ({currencySymbol()})</span>
             <input
               inputMode="numeric"
               value={grouped(money.survivalOpening ? String(money.survivalOpening) : '')}

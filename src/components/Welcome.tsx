@@ -1,14 +1,15 @@
 import { Account } from './Account';
 import { useCloud } from '../cloud/CloudProvider';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { buildSampleData } from '../sample';
 import { defaultAnswers, setupErrors } from '../setup';
 import type { SetupAnswers } from '../setup';
 import { useStore } from '../store';
 import { parseImport } from '../sync';
-import { DEFAULT_ITEMS } from '../types';
-import { naira } from '../money';
+import { defaultItemsFor } from '../localize';
 import { addDays, todayKey } from '../utils';
+import { RegionUnits } from './RegionUnits';
+import { activePrefs, currencyName, currencySymbol, fmtMoney, fmtNumber, fromDisplay, toDisplay, weightUnit } from '../units';
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0];
 const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -17,7 +18,7 @@ const STEPS = ['Training', 'Body', 'Money', 'Career', 'Rewards'] as const;
 
 const digits = (s: string) => s.replace(/[^\d]/g, '');
 const decimal = (s: string) => s.replace(/[^\d.]/g, '');
-const grouped = (s: string) => (s ? Number(s).toLocaleString('en-NG') : '');
+const grouped = (s: string) => (s ? fmtNumber(Number(s)) : '');
 
 export function Welcome() {
   const cloud = useCloud();
@@ -31,6 +32,14 @@ export function Welcome() {
 
   const set = (patch: Partial<SetupAnswers>) => setA((x) => ({ ...x, ...patch }));
   const num = (s: string) => (s === '' ? null : Number(s));
+  /** What the person typed is in their unit; the answers are kept in kilograms. */
+  const kgOf = (s: string) => (s === '' || !Number.isFinite(Number(s)) ? null : fromDisplay(Number(s)));
+  // Switching between kg and lb re-writes what is already typed in the new unit.
+  const unit = weightUnit();
+  useEffect(() => {
+    setRaw((r) => ({ ...r, weight: a.weight == null ? r.weight : String(toDisplay(a.weight)), goal: a.goalWeight == null ? r.goal : String(toDisplay(a.goalWeight)) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit]);
   const stepFields: Record<number, (keyof typeof err)[]> = {
     0: ['days'],
     1: ['weight', 'goalWeight'],
@@ -135,15 +144,16 @@ export function Welcome() {
           <>
             <h1>Your starting point</h1>
             <p className="sub">Weigh-ins are weekly. A first weight lets the app suggest a realistic pace. Skip anything you don’t want to enter yet.</p>
+            <RegionUnits show="weight" />
             <div className="grid2">
               <label className="field">
-                <span>Weight today (kg)</span>
-                <input inputMode="decimal" value={raw.weight} placeholder="Optional" onChange={(e) => { const v = decimal(e.target.value); setRaw({ ...raw, weight: v }); set({ weight: num(v) }); }} />
+                <span>Weight today ({weightUnit()})</span>
+                <input inputMode="decimal" value={raw.weight} placeholder="Optional" onChange={(e) => { const v = decimal(e.target.value); setRaw({ ...raw, weight: v }); set({ weight: kgOf(v) }); }} />
                 {err.weight && <small className="err">{err.weight}</small>}
               </label>
               <label className="field">
-                <span>Goal weight (kg)</span>
-                <input inputMode="decimal" value={raw.goal} placeholder="Optional" onChange={(e) => { const v = decimal(e.target.value); setRaw({ ...raw, goal: v }); set({ goalWeight: num(v) }); }} />
+                <span>Goal weight ({weightUnit()})</span>
+                <input inputMode="decimal" value={raw.goal} placeholder="Optional" onChange={(e) => { const v = decimal(e.target.value); setRaw({ ...raw, goal: v }); set({ goalWeight: kgOf(v) }); }} />
                 {err.goalWeight && <small className="err">{err.goalWeight}</small>}
               </label>
             </div>
@@ -153,15 +163,16 @@ export function Welcome() {
         {step === 2 && (
           <>
             <h1>Money</h1>
-            <p className="sub">Your first goal is a survival fund of six months of spending, then an investment fund. All amounts are in naira.</p>
+            <p className="sub">Your first goal is a survival fund of six months of spending, then an investment fund. All amounts are in {currencyName(activePrefs().currency)}.</p>
+            <RegionUnits show="currency" />
             <div className="grid2">
               <label className="field">
-                <span>Rough daily spending (₦)</span>
+                <span>Rough daily spending ({currencySymbol()})</span>
                 <input inputMode="numeric" value={grouped(raw.daily)} placeholder="Optional" onChange={(e) => { const v = digits(e.target.value); setRaw({ ...raw, daily: v }); set({ dailyEstimate: num(v) }); }} />
                 {err.dailyEstimate && <small className="err">{err.dailyEstimate}</small>}
               </label>
               <label className="field">
-                <span>Already in your survival fund (₦)</span>
+                <span>Already in your survival fund ({currencySymbol()})</span>
                 <input inputMode="numeric" value={grouped(raw.opening)} placeholder="0" onChange={(e) => { const v = digits(e.target.value); setRaw({ ...raw, opening: v }); set({ survivalOpening: Number(v) || 0 }); }} />
                 {err.survivalOpening && <small className="err">{err.survivalOpening}</small>}
               </label>
@@ -213,9 +224,9 @@ export function Welcome() {
             </div>
             {a.keepRewards && (
               <ul className="bullets">
-                {DEFAULT_ITEMS.map((i) => (
+                {defaultItemsFor(activePrefs().currency).map((i) => (
                   <li key={i.id}>
-                    {i.name}, {i.cost ? naira(i.cost) : 'free'}
+                    {i.name}, {i.cost ? fmtMoney(i.cost) : 'free'}
                   </li>
                 ))}
               </ul>

@@ -1,6 +1,7 @@
 import type { ProviderId } from './ai';
 import type { DayDef, DayKey, MEASURES } from './program';
 import { addDays, todayKey } from './utils';
+import type { Prefs } from './units';
 
 export type MeasureKey = (typeof MEASURES)[number]['key'];
 
@@ -181,6 +182,8 @@ export interface AppData {
   /** When each single-value setting was last changed, so merging keeps the most recent one. */
   stamps?: Record<string, string>;
   program?: DayDef[]; // the person's own training programme; the built-in one when absent
+  /** Currency and weight unit. Absent means the old default (naira, kg) for existing saves, or what the person's location suggests for a new one. Weights are always stored in kg. */
+  prefs?: Prefs;
   /** Ids of things the user deleted, so a merge from another device does not bring them back. */
   gone: string[];
   /** False until the first-run setup is finished or skipped. Saves from before the setup existed count as done. */

@@ -3,6 +3,7 @@ import { programError } from './program';
 import type { DayKey } from './program';
 import { emptyAdvisor, emptyCareer, emptyMoney, emptyRewards } from './types';
 import type { AppData } from './types';
+import { isCurrency } from './units';
 
 /**
  * Defensive clean-up of anything that comes from outside the running app: saved data, imported files, other tabs.
@@ -134,6 +135,8 @@ export function sanitize(input: AppData): AppData {
   const savePct = num(money.savePct);
   const program = p.program != null && programError(p.program as never) == null ? (p.program as AppData['program']) : undefined;
   const cats = strings(money.categories);
+  const rawPrefs = obj(p.prefs);
+  const prefs = isCurrency(rawPrefs.currency) && (rawPrefs.weightUnit === 'kg' || rawPrefs.weightUnit === 'lb') ? { currency: rawPrefs.currency, weightUnit: rawPrefs.weightUnit as 'kg' | 'lb' } : undefined;
 
   const out: AppData = {
     version: 1,
@@ -180,6 +183,7 @@ export function sanitize(input: AppData): AppData {
     plans,
     stamps,
     ...(program && { program }),
+    ...(prefs && { prefs }),
     ...(typeof p.modified === 'string' && { modified: p.modified }),
   };
   return out;

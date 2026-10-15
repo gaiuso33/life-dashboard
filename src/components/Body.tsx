@@ -6,6 +6,7 @@ import { MEASURES } from '../program';
 import { useStore } from '../store';
 import type { MeasureKey } from '../types';
 import { dayNumber, fmtShort, round1, todayKey } from '../utils';
+import { fmtWeight, fromDisplay, toDisplay, toDisplayExact, weightUnit } from '../units';
 
 export function Body() {
   const { data, dispatch } = useStore();
@@ -21,12 +22,17 @@ export function Body() {
   const [saved, setSaved] = useState(false);
 
   const trend = weightTrend(entries);
+  const dChange = latest && first ? round1(toDisplayExact(latest.weight - first.weight)) : 0;
+  const goalKgOk = (t: string) => {
+    const kg = fromDisplay(parseFloat(t));
+    return Number.isFinite(kg) && kg >= 30 && kg <= 250;
+  };
   const pace = latest ? suggestedPace(latest.weight) : null;
   const goal = data.goalWeight;
   const proposed = latest ? suggestedGoal(latest.weight) : null;
 
   const save = () => {
-    const w = parseFloat(weight);
+    const w = fromDisplay(parseFloat(weight));
     if (!Number.isFinite(w) || w <= 0) return;
     const measures: Partial<Record<MeasureKey, number>> = {};
     for (const { key } of MEASURES) {
@@ -40,8 +46,8 @@ export function Body() {
     window.setTimeout(() => setSaved(false), 2500);
   };
 
-  const weightSeries: Series[] = [{ name: 'Weigh-in', pts: entries.map((e) => ({ x: dayNumber(e.date), y: e.weight })), color: 'var(--plate-blue)', dots: true }];
-  if (trend) weightSeries.push({ name: 'Trend', pts: entries.slice(-6).map((e) => ({ x: dayNumber(e.date), y: Math.round(trend.fitAt(e.date) * 100) / 100 })), color: 'var(--plate-yellow)', dashed: true });
+  const weightSeries: Series[] = [{ name: 'Weigh-in', pts: entries.map((e) => ({ x: dayNumber(e.date), y: Math.round(toDisplayExact(e.weight) * 10) / 10 })), color: 'var(--plate-blue)', dots: true }];
+  if (trend) weightSeries.push({ name: 'Trend', pts: entries.slice(-6).map((e) => ({ x: dayNumber(e.date), y: Math.round(toDisplayExact(trend.fitAt(e.date)) * 100) / 100 })), color: 'var(--plate-yellow)', dashed: true });
 
   const weeks = weeklyRepTotals(data, today, 8);
   const bars: Bar[] = weeks.map((w) => ({ label: fmtShort(w.monday), value: w.reps, detail: `${w.sessions} of 3 sessions` }));
@@ -69,8 +75,8 @@ export function Body() {
               <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
             </label>
             <label className="field">
-              <span>Weight (kg)</span>
-              <input inputMode="decimal" value={weight} placeholder={latest ? String(latest.weight) : '70.0'} onChange={(e) => setWeight(e.target.value.replace(',', '.'))} />
+              <span>Weight ({weightUnit()})</span>
+              <input inputMode="decimal" value={weight} placeholder={latest ? String(toDisplay(latest.weight)) : weightUnit() === 'lb' ? '155.0' : '70.0'} onChange={(e) => setWeight(e.target.value.replace(',', '.'))} />
             </label>
             <div className="measure-grid">
               {MEASURES.map(({ key, label }) => (
@@ -102,42 +108,42 @@ export function Body() {
                 <div>
                   <dt>Latest</dt>
                   <dd>
-                    {latest.weight}
-                    <small>kg</small>
+                    {toDisplay(latest.weight)}
+                    <small>{weightUnit()}</small>
                   </dd>
                 </div>
                 <div>
                   <dt>Since {fmtShort(first.date)}</dt>
                   <dd>
-                    {round1(latest.weight - first.weight) >= 0 ? '+' : ''}
-                    {round1(latest.weight - first.weight)}
-                    <small>kg</small>
+                    {dChange >= 0 ? '+' : ''}
+                    {dChange}
+                    <small>{weightUnit()}</small>
                   </dd>
                 </div>
                 <div>
                   <dt>Trend</dt>
                   <dd>
-                    {trend ? `${trend.slope >= 0 ? '+' : ''}${round1(trend.slope * 100) / 100}` : '–'}
-                    <small>kg/wk</small>
+                    {trend ? `${trend.slope >= 0 ? '+' : ''}${Math.round(toDisplayExact(trend.slope) * 100) / 100}` : '–'}
+                    <small>{weightUnit()}/wk</small>
                   </dd>
                 </div>
               </dl>
             ) : (
               <p className="empty">No weigh-ins yet. Save your first one to start the trend line.</p>
             )}
-            {pace && <p className="note">Lean-gain pace for your weight: {round1(pace.low * 100) / 100} to {round1(pace.high * 100) / 100} kg per week. {paceNote}</p>}
+            {pace && <p className="note">Lean-gain pace for your weight: {Math.round(toDisplayExact(pace.low) * 100) / 100} to {Math.round(toDisplayExact(pace.high) * 100) / 100} {weightUnit()} per week. {paceNote}</p>}
           </section>
 
           <section className="panel">
             <h2>Weight goal</h2>
             {goal != null ? (
               <p>
-                Target <b>{goal} kg</b>
-                {latest ? `, ${round1(goal - latest.weight)} kg from now.` : '.'}
+                Target <b>{fmtWeight(goal)}</b>
+                {latest ? `, ${round1(toDisplayExact(goal - latest.weight))} ${weightUnit()} from now.` : '.'}
               </p>
             ) : proposed != null ? (
               <p>
-                A realistic 12-week target from your latest weigh-in is <b>{proposed} kg</b>.
+                A realistic 12-week target from your latest weigh-in is <b>{fmtWeight(proposed)}</b>.
               </p>
             ) : (
               <p className="empty">Log a weigh-in and the app will propose a realistic target.</p>
@@ -145,18 +151,18 @@ export function Body() {
             <div className="load-row">
               {goal == null && proposed != null && (
                 <button className="btn primary" onClick={() => dispatch({ t: 'goal', value: proposed })}>
-                  Use {proposed} kg
+                  Use {fmtWeight(proposed)}
                 </button>
               )}
               <label className="load">
-                <span>Set your own (kg)</span>
-                <input inputMode="decimal" value={goalText} placeholder={goal != null ? String(goal) : ''} onChange={(e) => setGoalText(e.target.value.replace(',', '.'))} />
+                <span>Set your own ({weightUnit()})</span>
+                <input inputMode="decimal" value={goalText} placeholder={goal != null ? String(toDisplay(goal)) : ''} onChange={(e) => setGoalText(e.target.value.replace(',', '.'))} />
               </label>
               <button
                 className="btn"
-                disabled={!Number.isFinite(parseFloat(goalText))}
+                disabled={!goalKgOk(goalText)}
                 onClick={() => {
-                  dispatch({ t: 'goal', value: parseFloat(goalText) });
+                  dispatch({ t: 'goal', value: fromDisplay(parseFloat(goalText)) });
                   setGoalText('');
                 }}
               >
@@ -175,7 +181,7 @@ export function Body() {
       <section className="panel">
         <h2>Bodyweight</h2>
         {entries.length >= 2 ? (
-          <LineChart series={weightSeries} goal={goal} unit="kg" label="Bodyweight over time in kilograms with a trend line" />
+          <LineChart series={weightSeries} goal={goal != null ? toDisplayExact(goal) : null} unit={weightUnit()} label={`Bodyweight over time in ${weightUnit() === 'lb' ? 'pounds' : 'kilograms'} with a trend line`} />
         ) : (
           <p className="empty">Two weigh-ins are enough to draw the line.</p>
         )}
