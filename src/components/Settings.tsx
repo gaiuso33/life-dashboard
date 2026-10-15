@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react';
-import { CATEGORIES, PROTECTED_CATEGORIES, categoriesOf, naira, newId } from '../money';
+import {CATEGORIES, PROTECTED_CATEGORIES, categoriesOf, newId} from '../money';
 import type { Tab } from '../nav';
 import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../program';
 import type { DayDef, ExerciseDef } from '../program';
 import { TIER_LABEL } from '../rewards';
 import { promptInstall, useInstall } from '../install';
+import { RegionUnits } from './RegionUnits';
 import { buildIcs, downloadIcs, loadReminders, saveReminders } from '../reminders';
 import type { ReminderPlan } from '../reminders';
 import { useStore } from '../store';
 import type { RewardItem, Tier } from '../types';
 import { todayKey } from '../utils';
+import { fmtMoney } from '../units';
+import { currencySymbol } from '../units';
+import { fromDisplay, toDisplay, weightUnit } from '../units';
 
 const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TIERS: Tier[] = ['week', 'biweek', 'month', 'landmark'];
@@ -74,6 +78,18 @@ function Reminders() {
   );
 }
 
+function Region() {
+  return (
+    <section className="panel" id="region">
+      <h2>Currency and weight</h2>
+      <RegionUnits />
+      <p className="note">
+        Changing the currency only changes the symbol and formatting. It does <b>not</b> convert amounts you have already logged. Weights are stored in kilograms, so switching between kg and lb is exact and changes nothing you have saved.
+      </p>
+    </section>
+  );
+}
+
 function Install() {
   const state = useInstall();
   return (
@@ -112,11 +128,12 @@ export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => v
       </header>
       <div className="settings">
         <Install />
+        <Region />
         <Reminders />
         <Programme />
         <Categories />
         <Rewards />
-        <Goals go={go} />
+        <Goals key={weightUnit()} go={go} />
         <DataSection onSync={onSync} />
       </div>
     </div>
@@ -344,7 +361,7 @@ function Rewards() {
   return (
     <section className="panel">
       <h2>Reward menu</h2>
-      <p className="note first">What you can pick when a reward unlocks. Prices are what you expect to pay in naira; free treats can be 0.</p>
+      <p className="note first">What you can pick when a reward unlocks. Prices are what you expect to pay; free treats can be 0.</p>
       {TIERS.map((t) => (
         <div key={t} className="tier-group">
           <h3>{TIER_LABEL[t]}</h3>
@@ -375,7 +392,7 @@ function Rewards() {
           <input value={name} maxLength={50} onChange={(e) => setName(e.target.value)} placeholder="Cinema night" />
         </label>
         <label className="field mini">
-          <span>Cost (₦)</span>
+          <span>Cost ({currencySymbol()})</span>
           <input inputMode="numeric" value={cost} onChange={(e) => setCost(digits(e.target.value))} placeholder="0" />
         </label>
         <label className="field mini">
@@ -430,23 +447,24 @@ function ItemRow({ item }: { item: RewardItem }) {
 function Goals({ go }: { go: (t: Tab) => void }) {
   const { data, dispatch } = useStore();
   const c = data.career;
-  const [weight, setWeight] = useState(data.goalWeight != null ? String(data.goalWeight) : '');
+  const [weight, setWeight] = useState(data.goalWeight != null ? String(toDisplay(data.goalWeight)) : '');
   const [count, setCount] = useState(String(c.goalCount));
   return (
     <section className="panel">
       <h2>Goals</h2>
       <div className="goal-grid">
         <label className="field">
-          <span>Goal body weight (kg)</span>
+          <span>Goal body weight ({weightUnit()})</span>
           <input
             inputMode="decimal"
             value={weight}
             placeholder="Not set"
             onChange={(e) => setWeight(e.target.value.replace(/[^\d.]/g, ''))}
             onBlur={() => {
-              const v = parseFloat(weight);
-              dispatch({ t: 'goal', value: Number.isFinite(v) && v >= 30 && v <= 250 ? v : null });
-              if (!(Number.isFinite(v) && v >= 30 && v <= 250)) setWeight('');
+              const kg = fromDisplay(parseFloat(weight));
+              const ok = Number.isFinite(kg) && kg >= 30 && kg <= 250;
+              dispatch({ t: 'goal', value: ok ? kg : null });
+              if (!ok) setWeight('');
             }}
           />
         </label>
@@ -469,7 +487,7 @@ function Goals({ go }: { go: (t: Tab) => void }) {
         </label>
       </div>
       <p className="note">
-        Savings split ({data.money.savePct}%), your rough daily spend ({data.money.dailyEstimate != null ? naira(data.money.dailyEstimate) : 'not set'}) and your starting survival fund are edited on the Money screen, and the AI advisor settings are on the Advisor screen.
+        Savings split ({data.money.savePct}%), your rough daily spend ({data.money.dailyEstimate != null ? fmtMoney(data.money.dailyEstimate) : 'not set'}) and your starting survival fund are edited on the Money screen, and the AI advisor settings are on the Advisor screen.
       </p>
       <div className="row-action">
         <button className="btn" onClick={() => go('money')}>

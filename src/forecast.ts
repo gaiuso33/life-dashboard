@@ -1,10 +1,11 @@
 import { weeklyRepTotals, suggestedPace } from './derive';
 import { backtestWeight, predictAt, savingPaces, shipPaces, weightConfidence, weightFit } from './projection';
 import type { Confidence } from './projection';
-import { monthlySavingPace, naira, survivalTarget, fundBalance, DAYS_PER_MONTH } from './money';
+import {monthlySavingPace, survivalTarget, fundBalance, DAYS_PER_MONTH} from './money';
 import { goalForecast } from './career';
 import type { AppData } from './types';
 import { addDays, dayNumber, fmtShort, mondayOf, round1 } from './utils';
+import { fmtMoney, fmtWeight, toDisplayExact, weightUnit } from './units';
 
 /** A picture of a forecast: what happened so far, and where it could go. Both axes are plain numbers; `xLabel` turns an x into text. */
 export interface FanChartData {
@@ -50,7 +51,10 @@ export function weightForecast(data: AppData): Forecast {
   const base = predictAt(fit, lastWeek).mid;
   const ahead = predictAt(fit, lastWeek + 12, 0.4);
 
-  let detail = `The line is moving ${slope >= 0 ? 'up' : 'down'} ${Math.abs(slope).toFixed(2)} kg a week. A usual lean-gain pace for your weight is ${pace.low.toFixed(2)} to ${pace.high.toFixed(2)} kg a week. This is a straight line through your last ${fit.n} weigh-ins, and the range is wider the fewer weigh-ins and the more they bounce around. It is not a prediction of how your body will respond.`;
+  // Everything is worked out in kilograms and shown in the person's own unit.
+  const u = weightUnit();
+  const d = toDisplayExact;
+  let detail = `The line is moving ${slope >= 0 ? 'up' : 'down'} ${Math.abs(d(slope)).toFixed(2)} ${u} a week. A usual lean-gain pace for your weight is ${d(pace.low).toFixed(2)} to ${d(pace.high).toFixed(2)} ${u} a week. This is a straight line through your last ${fit.n} weigh-ins, and the range is wider the fewer weigh-ins and the more they bounce around. It is not a prediction of how your body will respond.`;
   let tone: Forecast['tone'] = 'info';
   if (slope >= pace.low && slope <= pace.high) tone = 'good';
   else if (slope < pace.low * 0.5) tone = 'warn';
@@ -63,30 +67,30 @@ export function weightForecast(data: AppData): Forecast {
       const fast = (goal - base) / (slope + t * se);
       const slow = slope - t * se > 0.01 ? (goal - base) / (slope - t * se) : Infinity;
       const spread = slow === Infinity ? `, and it could be much longer if the trend flattens` : fast >= 1 ? `, anywhere from ${Math.round(fast)} to ${Math.round(slow)} weeks` : '';
-      detail += weeks > 104 ? ` Reaching ${goal} kg would take over two years at this pace.` : ` Reaching ${goal} kg would take about ${Math.round(weeks)} weeks at this pace${weeks <= 104 ? spread : ''}.`;
+      detail += weeks > 104 ? ` Reaching ${fmtWeight(goal)} would take over two years at this pace.` : ` Reaching ${fmtWeight(goal)} would take about ${Math.round(weeks)} weeks at this pace${weeks <= 104 ? spread : ''}.`;
     } else if (goal > base) {
-      detail += ` At this pace you would not reach ${goal} kg, because the line is flat or falling.`;
+      detail += ` At this pace you would not reach ${fmtWeight(goal)}, because the line is flat or falling.`;
       tone = 'warn';
     } else {
-      detail += ` You are at or past your ${goal} kg goal.`;
+      detail += ` You are at or past your ${fmtWeight(goal)} goal.`;
     }
   }
 
   const bt = backtestWeight(data.body);
-  const trackRecord = bt ? `Replaying your history, forecasts like this missed by about ${bt.mae.toFixed(1)} kg on average (${bt.n} checked), and ${Math.round(bt.inside * 100)}% of weigh-ins landed inside the range.` : undefined;
+  const trackRecord = bt ? `Replaying your history, forecasts like this missed by about ${d(bt.mae).toFixed(1)} ${u} on average (${bt.n} checked), and ${Math.round(bt.inside * 100)}% of weigh-ins landed inside the range.` : undefined;
 
-  const pts = (f: (w: number) => number) => [0, 4, 8, 12].map((w) => ({ x: lastWeek + w, y: f(w) }));
-  const hist = data.body.slice(-12).map((e) => ({ x: dayNumber(e.date) / 7, y: e.weight }));
+  const pts = (f: (w: number) => number) => [0, 4, 8, 12].map((w) => ({ x: lastWeek + w, y: d(f(w)) }));
+  const hist = data.body.slice(-12).map((e) => ({ x: dayNumber(e.date) / 7, y: d(e.weight) }));
   const chart: FanChartData = {
-    unit: 'kg',
+    unit: u,
     history: hist,
     mid: pts((w) => predictAt(fit, lastWeek + w, 0.4).mid),
     low: pts((w) => predictAt(fit, lastWeek + w, 0.4).low),
     high: pts((w) => predictAt(fit, lastWeek + w, 0.4).high),
-    goal,
+    goal: goal == null ? null : d(goal),
     xLabel: (x) => fmtShort(addDays('1970-01-01', Math.round(x * 7))),
   };
-  return { id: 'weight', title, headline: `About ${round1(ahead.mid)} kg in 12 weeks (likely ${round1(ahead.low)} to ${round1(ahead.high)})`, detail, tone, confidence, trackRecord, chart };
+  return { id: 'weight', title, headline: `About ${round1(d(ahead.mid))} ${u} in 12 weeks (likely ${round1(d(ahead.low))} to ${round1(d(ahead.high))})`, detail, tone, confidence, trackRecord, chart };
 }
 
 const monthYear = (key: string) => {
@@ -100,10 +104,10 @@ export function fundForecast(data: AppData, today: string): Forecast {
   const target = survivalTarget(data, today).target;
   if (target == null) return { id: 'fund', title, headline: 'No target yet', detail: 'Enter a rough spend per day on the Money screen, or log about four weeks of spending.', tone: 'info' };
   const balance = fundBalance(data, 'survival');
-  if (balance >= target) return { id: 'fund', title, headline: 'Complete', detail: `${naira(balance)} covers six months of spending. New savings go to the investment fund.`, tone: 'good' };
+  if (balance >= target) return { id: 'fund', title, headline: 'Complete', detail: `${fmtMoney(balance)} covers six months of spending. New savings go to the investment fund.`, tone: 'good' };
   const paces = savingPaces(data, today);
   const typical = monthlySavingPace(data, today);
-  if (typical <= 0 && paces.typical <= 0) return { id: 'fund', title, headline: 'No savings in the last 8 weeks', detail: `${naira(balance)} of ${naira(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
+  if (typical <= 0 && paces.typical <= 0) return { id: 'fund', title, headline: 'No savings in the last 8 weeks', detail: `${fmtMoney(balance)} of ${fmtMoney(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
 
   const need = target - balance;
   const mid = need / (typical > 0 ? typical : paces.typical);
@@ -117,7 +121,7 @@ export function fundForecast(data: AppData, today: string): Forecast {
   const horizon = Math.min(60, Math.max(3, Math.ceil(Math.min(slowM === Infinity ? mid * 2 : slowM, mid * 2.5))));
   const line = (rate: number) => [0, horizon / 3, (2 * horizon) / 3, horizon].map((m) => ({ x: monthX(m), y: Math.min(target * 1.05, balance + rate * m) }));
   const chart: FanChartData = {
-    unit: '₦',
+    unit: 'money',
     history: [{ x: monthX(0), y: balance }],
     mid: line(typical > 0 ? typical : paces.typical),
     low: line(Math.max(0, paces.slow)),
@@ -129,7 +133,7 @@ export function fundForecast(data: AppData, today: string): Forecast {
     id: 'fund',
     title,
     headline: `${monthsWord(mid)} to go (around ${monthYear(when)})`,
-    detail: `${naira(balance)} of ${naira(target)}, saving about ${naira(typical > 0 ? typical : paces.typical)} a month over the last 8 weeks. ${range} ${stretches} Irregular income means this will move around.`,
+    detail: `${fmtMoney(balance)} of ${fmtMoney(target)}, saving about ${fmtMoney(typical > 0 ? typical : paces.typical)} a month over the last 8 weeks. ${range} ${stretches} Irregular income means this will move around.`,
     tone: mid > 36 ? 'warn' : 'info',
     confidence: paces.confidence,
     chart,

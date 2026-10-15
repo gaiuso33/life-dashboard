@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.18)
+# Personal Life Dashboard — Product Spec (v0.19)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -167,8 +167,8 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 125 unit tests (incl. the statement importer, reminders and forecasting) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 54 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 144 unit tests (incl. the statement importer, reminders, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 59 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -218,3 +218,17 @@ The Advisor's "Where you're heading" now shows how sure each estimate is, not ju
 `e2e/mobile.spec.ts` runs with touch at 320×568 (smallest common phone), 390×844 and 844×390 (on its side): every screen has no sideways scroll, the bottom bar buttons are all on screen, no text box is under 16px (iPhones zoom the page when such a box is focused), and a statement can be imported with taps from start to finish. It also simulates the browser's install offer (the Install button appears, asks the browser to install, then reads "Already installed") and checks that an iPhone is told to use Safari's Add to Home Screen.
 
 **What this cannot prove** (it is Chromium pretending to be a phone): the real keyboard, the phone's file picker, the real install prompt, Safari's own behaviour, and how the calendar file opens on a given phone. Check these on a real phone once: install it, set reminders and open the downloaded calendar file, import a CSV from the Files app, and rotate the phone.
+
+## 25. Currency and weight follow where you are
+
+The first-run setup suggests a **currency** and a **weight unit** (kg or lb) from where the person is, and Settings → "Currency and weight" lets them change either at any time.
+- **How the location is found:** from the browser's timezone (the most reliable sign of the country), then a browser language that names a country (`en-GB`). It does not use the location permission and looks nothing up online. If neither says where they are, it starts on dollars and kilograms and says so. Pounds are suggested only where they are the norm (US, Liberia, Myanmar). Code: `src/units.ts` (detection and formatting), `src/localize.ts` (starting prices).
+- **Money is relabelled, never converted.** Changing the currency changes the symbol and formatting only; no exchange rates are used anywhere, and logged amounts keep their numbers. Settings says so next to the picker. The starting reward ideas, the savings badges ("$10 saved") and the milestone amounts are priced in round numbers for the chosen currency, from rough order-of-magnitude guides that are not exchange rates. A currency the app has no sense of gets no starting rewards rather than mispriced ones.
+- **Weight is stored in kilograms and shown in the chosen unit.** Switching between kg and lb is exact and changes nothing saved; what is typed is converted on the way in (to 0.01 kg). Forecasts, the chart, the coach and the setup limits all follow the unit.
+- **Existing people keep naira and kilograms** until they choose otherwise, wherever they are. The sample data stays in naira (its amounts are naira-sized) but weighs in the local unit.
+- **The AI advisor** is told the currency and weight unit and receives weights already in that unit, still numbers only.
+- **Statement import** now reads any currency sign or code ($ £ € ₹ NGN USD Rs, etc.).
+- The choice is one setting that syncs between devices like the others (the latest change wins).
+- Not done: measurements are still in centimetres, training loads are whatever the person types, the bank-merchant words used to guess spending categories are Nigerian-leaning, and the app is in English only.
+
+**Also fixed here:** on phones the first-run setup card was split into two squashed columns by a rule meant for list rows; it is now one column.

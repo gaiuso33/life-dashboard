@@ -624,3 +624,9 @@ textarea:focus-visible { outline-offset: 0; border-color: var(--chalk); }
 @media (min-width: 900px) { .app { grid-template-columns: 224px minmax(0, 1fr); } }
 .main, .page, .settings, .settings > .panel { min-width: 0; }
 .settings { grid-template-columns: minmax(0, 1fr); }
+
+/* The setup card is one column. A phone rule that puts every action row in column 2 must not split the card into two. */
+.welcome-card { grid-template-columns: minmax(0, 1fr); }
+.welcome-card > * { grid-column: 1; }
+.region { display: grid; gap: 6px; min-width: 0; }
+.region .field select { min-width: 0; width: 100%; text-overflow: ellipsis; }

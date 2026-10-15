@@ -178,7 +178,10 @@ export function detectDateOrder(values: string[]): { order: DateOrder; certain: 
   return { order: 'dmy', certain: !numeric };
 }
 
-/** A signed amount in naira, or null. Handles ₦, NGN, 1,234.56, 1.234,56, (500), 500-, "500 DR". */
+/** A currency sign or code next to a number: ₦ $ £ €, NGN USD, Rs, or the N / R some banks print. Only removed when touching a digit. */
+const CURRENCY_MARK = /\p{Sc}|(?<![A-Za-z])(?:[A-Z]{3}|Rs\.?|[NR])(?=\s*[\d(\-.,])|(?<=[\d)]\s*)(?:[A-Z]{3}|Rs\.?)(?![A-Za-z])/gu;
+
+/** A signed amount, or null. Ignores any currency sign or code (₦ NGN $ £ € USD Rs), and handles 1,234.56, 1.234,56, (500), 500-, "500 DR". */
 export function parseMoney(raw: string): number | null {
   let s = raw.trim();
   if (!s) return null;
@@ -188,7 +191,7 @@ export function parseMoney(raw: string): number | null {
     s = s.slice(1, -1);
   }
   if (/\bDR\b/i.test(s)) negative = true;
-  s = s.replace(/\b(CR|DR)\b/gi, '').replace(/NGN|₦|N(?=\s*\d)/gi, '').replace(/\s+/g, '');
+  s = s.replace(/\b(CR|DR)\b/gi, '').replace(CURRENCY_MARK, '').replace(/\s+/g, '');
   if (s.startsWith('-') || s.startsWith('−')) {
     negative = true;
     s = s.slice(1);

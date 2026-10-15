@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ITEMS, dayScore, dayStatus, plannedFor } from '../derive';
-import { naira, newId } from '../money';
+import { newId } from '../money';
 import { KIND_LABEL, monthCells, monthEnd, monthKey, monthStart, monthTitle, plansBetween, plansOn, shiftMonth } from '../plan';
 import { dayDef } from '../program';
 import { periodStart } from '../rewards';
@@ -8,6 +8,8 @@ import { useStore } from '../store';
 import type { PlanKind } from '../types';
 import { WEEKDAYS } from '../dates';
 import { addDays, fmtLong, todayKey } from '../utils';
+import { fmtMoney } from '../units';
+import { currencySymbol } from '../units';
 
 const KINDS = Object.keys(KIND_LABEL) as PlanKind[];
 
@@ -109,11 +111,11 @@ export function Month() {
         </div>
         <div>
           <dt>Bills still due</dt>
-          <dd>{naira(stats.billsLeft)}</dd>
+          <dd>{fmtMoney(stats.billsLeft)}</dd>
         </div>
         <div>
           <dt>Income still due</dt>
-          <dd>{naira(stats.incomeLeft)}</dd>
+          <dd>{fmtMoney(stats.incomeLeft)}</dd>
         </div>
       </dl>
 
@@ -184,7 +186,7 @@ export function Month() {
                       <b>{o.item.title}</b>
                       <small>
                         {KIND_LABEL[o.item.kind]}
-                        {o.item.amount > 0 ? `, ${naira(o.item.amount)}` : ''}
+                        {o.item.amount > 0 ? `, ${fmtMoney(o.item.amount)}` : ''}
                         {o.item.repeat === 'monthly' ? ', every month' : ''}
                       </small>
                     </span>
@@ -223,7 +225,7 @@ export function Month() {
             </div>
             {(kind === 'bill' || kind === 'income') && (
               <label className="field">
-                <span>Amount (₦)</span>
+                <span>Amount ({currencySymbol()})</span>
                 <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d,]/g, ''))} placeholder="3500" />
               </label>
             )}

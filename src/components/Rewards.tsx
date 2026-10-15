@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AREA_COLOR, evaluateBadges } from '../badges';
 import type { BadgeState } from '../badges';
-import { naira, newId } from '../money';
+import { newId } from '../money';
 import { TIER_BLURB, TIER_LABEL, itemsFor, landmarksFor, periodsFor } from '../rewards';
 import type { Period, PeriodTier } from '../rewards';
 import { useStore } from '../store';
 import type { RewardItem, Tier } from '../types';
 import { fmtShort, todayKey } from '../utils';
+import { fmtMoney } from '../units';
+import { currencySymbol } from '../units';
 
 /** "a", "a and b", "a, b and c" */
 const listOf = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
@@ -49,14 +51,14 @@ function ClaimBox({ items, onClaim }: { items: RewardItem[]; onClaim: (item: Rew
         {items.map((i) => (
           <button type="button" key={i.id} role="radio" aria-checked={item.id === i.id} onClick={() => setSel(i.id)}>
             {i.name}
-            <small>{i.cost > 0 ? naira(i.cost) : 'Free'}</small>
+            <small>{i.cost > 0 ? fmtMoney(i.cost) : 'Free'}</small>
           </button>
         ))}
       </div>
       {item.cost > 0 && (
         <label className="check">
           <input type="checkbox" checked={log} onChange={(e) => setLog(e.target.checked)} />
-          <span>Log {naira(item.cost)} as spending in Money (Rewards)</span>
+          <span>Log {fmtMoney(item.cost)} as spending in Money (Rewards)</span>
         </label>
       )}
       <button className="btn primary" onClick={() => onClaim(item, log)}>
@@ -113,7 +115,7 @@ export function Rewards() {
           </div>
           <div>
             <dt>Treats this month</dt>
-            <dd className="money-num">{naira(spentThisMonth)}</dd>
+            <dd className="money-num">{fmtMoney(spentThisMonth)}</dd>
           </div>
         </dl>
       </section>
@@ -223,7 +225,7 @@ export function Rewards() {
                     {c.logged ? ', logged in Money' : ''}
                   </span>
                 </span>
-                <span className="txn-amt">{c.cost > 0 ? naira(c.cost) : 'Free'}</span>
+                <span className="txn-amt">{c.cost > 0 ? fmtMoney(c.cost) : 'Free'}</span>
                 <button className="btn ghost" aria-label={`Remove claim ${c.name} from ${fmtShort(c.date)}`} onClick={() => dispatch({ t: 'claim-del', id: c.id })}>
                   Remove
                 </button>
@@ -249,7 +251,7 @@ export function Rewards() {
                   {itemsFor(data, t).map((i) => (
                     <li key={i.id}>
                       <span>
-                        {i.name} <small>{i.cost > 0 ? naira(i.cost) : 'Free'}</small>
+                        {i.name} <small>{i.cost > 0 ? fmtMoney(i.cost) : 'Free'}</small>
                       </span>
                       <button className="btn ghost" aria-label={`Remove ${i.name} from the menu`} onClick={() => dispatch({ t: 'item-del', id: i.id })}>
                         Remove
@@ -266,7 +268,7 @@ export function Rewards() {
               <input value={name} placeholder="e.g. Smoothie" onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="field">
-              <span>Cost (₦, 0 if free)</span>
+              <span>Cost ({currencySymbol()}, 0 if free)</span>
               <input inputMode="numeric" value={cost} placeholder="0" onChange={(e) => setCost(e.target.value.replace(/\D/g, '').slice(0, 7))} />
             </label>
             <label className="field">
@@ -312,7 +314,7 @@ function PeriodBody({ p, items, onClaim, onUndo }: { p: Period; items: RewardIte
         <div className="claimed-row">
           <p className="ok">
             Claimed: {p.claim.name}
-            {p.claim.cost > 0 ? `, ${naira(p.claim.cost)}` : ''}.
+            {p.claim.cost > 0 ? `, ${fmtMoney(p.claim.cost)}` : ''}.
           </p>
           <button className="btn ghost" onClick={() => onUndo(p.claim!.id)}>
             Undo

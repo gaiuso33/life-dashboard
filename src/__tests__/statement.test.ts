@@ -199,3 +199,16 @@ describe('planImport', () => {
     expect(a).toBe(b);
   });
 });
+
+describe('money in any currency', () => {
+  it('reads amounts written with other currency signs and codes', () => {
+    const cases: [string, number][] = [
+      ['$1,234.56', 1234.56], ['USD1234', 1234], ['USD 1,234.50', 1234.5], ['1,500 NGN', 1500], ['£12.50', 12.5], ['€ 1.234,56', 1234.56],
+      ['Rs. 500', 500], ['R 250.00', 250], ['N1,000', 1000], ['($500)', -500], ['-$5', -5], ['₹ 1,00,000', 100000], ['500.00 CR', 500], ['1500 DR', -1500],
+    ];
+    for (const [raw, want] of cases) expect(parseMoney(raw), raw).toBe(want);
+  });
+  it('still rejects text that merely contains letters', () => {
+    for (const raw of ['ABC', 'Balance b/f', 'TOTAL', 'abc 12x']) expect(parseMoney(raw), raw).toBeNull();
+  });
+});

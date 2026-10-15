@@ -1,7 +1,9 @@
 import { dayScore, finishedSessionOn } from './derive';
-import { fundBalance, naira, survivalTarget } from './money';
+import { compact, fundBalance, survivalTarget } from './money';
+import { savedSteps } from './localize';
 import type { AppData } from './types';
 import { addDays, dayNumber, mondayOf } from './utils';
+import { activePrefs, currencySymbol, fmtMoney, fmtWeight, weightUnit } from './units';
 
 export type BadgeGroup = 'streak' | 'milestone';
 export type BadgeArea = 'train' | 'code' | 'money' | 'body' | 'all';
@@ -76,6 +78,18 @@ export const CATALOG: BadgeDef[] = [
   { id: 'weigh-first', name: 'First weigh-in', desc: 'Your starting point is on record.', group: 'milestone', area: 'body', glyph: 'kg', spec: { kind: 'weigh-first' } },
   { id: 'goal-weight', name: 'Target weight reached', desc: `You hit the weight goal you set.${LM}`, group: 'milestone', area: 'body', glyph: '★', landmark: true, spec: { kind: 'goal-weight' } },
 ];
+
+const SAVED_STEP: Record<string, number> = { 'saved-10k': 0, 'saved-50k': 1, 'saved-100k': 2 };
+/** Savings milestones and the weigh-in badge speak the person's own currency and weight unit. Badge ids never change. */
+export function localizedBadge(def: BadgeDef): BadgeDef {
+  const step = SAVED_STEP[def.id];
+  if (step != null) {
+    const n = savedSteps(activePrefs().currency)[step];
+    return { ...def, name: `${fmtMoney(n)} saved`, desc: `${fmtMoney(n)} moved into savings through logged transfers.`, glyph: `${currencySymbol()}${compact(n)}`, spec: { kind: 'saved', n } };
+  }
+  if (def.id === 'weigh-first') return { ...def, glyph: weightUnit() };
+  return def;
+}
 
 export interface BadgeState extends BadgeDef {
   earned: boolean;
@@ -236,7 +250,8 @@ export function evaluateBadges(data: AppData, today: string): BadgeState[] {
   const persisted = data.rewards.badges;
   const recent = (d: string | null) => d != null && dayNumber(today) - dayNumber(d) <= 3;
 
-  return CATALOG.map((def): BadgeState => {
+  return CATALOG.map((base): BadgeState => {
+    const def = localizedBadge(base);
     const sp = def.spec;
     let earnedNow = false;
     let on: string | null = null;
@@ -289,7 +304,7 @@ export function evaluateBadges(data: AppData, today: string): BadgeState[] {
         on = crossing(sp.n);
         value = savedTotal;
         goalN = sp.n;
-        progress = `${naira(Math.min(savedTotal, sp.n))} of ${naira(sp.n)}`;
+        progress = `${fmtMoney(Math.min(savedTotal, sp.n))} of ${fmtMoney(sp.n)}`;
         break;
       case 'fund': {
         const pct = target ? Math.min(100, Math.floor((fundNow / target) * 100)) : 0;
@@ -310,7 +325,7 @@ export function evaluateBadges(data: AppData, today: string): BadgeState[] {
         earnedNow = goalReached;
         on = goalOn;
         value = goalReached ? 1 : 0;
-        progress = goal == null ? 'Set a weight goal on the Body screen' : goalReached ? 'Done' : `Goal ${goal} kg`;
+        progress = goal == null ? 'Set a weight goal on the Body screen' : goalReached ? 'Done' : `Goal ${fmtWeight(goal)}`;
         break;
     }
 

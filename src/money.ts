@@ -21,7 +21,6 @@ export const DAYS_PER_MONTH = 30.4375;
 /** Days of spending history needed before the survival target is calculated from real data. */
 export const HISTORY_NEEDED = 28;
 
-export const naira = (n: number) => `₦${Math.round(n).toLocaleString('en-NG')}`;
 export const compact = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(Math.round(n)));
 
 export const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;

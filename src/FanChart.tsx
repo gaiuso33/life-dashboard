@@ -1,5 +1,6 @@
 import type { FanChartData } from './forecast';
-import { naira } from './money';
+import {} from './money';
+import { fmtMoney } from './units';
 
 const W = 320;
 const H = 150;
@@ -21,7 +22,7 @@ export function FanChart({ chart, label }: { chart: FanChartData; label: string 
   const sy = (y: number) => M.t + (1 - (y - y0) / (y1 - y0 || 1)) * (H - M.t - M.b);
   const path = (pts: { x: number; y: number }[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join('');
   const band = `${path(chart.high)}${[...chart.low].reverse().map((p) => `L${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join('')}Z`;
-  const fmt = (n: number) => (chart.unit === '₦' ? naira(Math.round(n)) : `${Math.round(n * 10) / 10} ${chart.unit}`);
+  const fmt = (n: number) => (chart.unit === 'money' ? fmtMoney(Math.round(n)) : `${Math.round(n * 10) / 10} ${chart.unit}`);
   const endMid = chart.mid[chart.mid.length - 1];
 
   return (

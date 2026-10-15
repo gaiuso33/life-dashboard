@@ -1,7 +1,7 @@
 import { evaluateBadges } from './badges';
 import type { BadgeState } from './badges';
 import { dayStatus, finishedSessionOn, lastSession, plannedFor, readyForMoreLoad, sessionProgress, sessionRepTotal } from './derive';
-import { naira, suggestedSave, survivalTarget } from './money';
+import {suggestedSave, survivalTarget} from './money';
 import type { Tab, TrainView } from './nav';
 import { dayDef } from './program';
 import { dueSoon } from './plan';
@@ -10,6 +10,7 @@ import { TIER_LABEL, landmarksFor, periodsFor } from './rewards';
 import type { PeriodTier } from './rewards';
 import type { AppData } from './types';
 import { addDays, dayNumber, fmtShort, mondayOf, weekday, weekdayName } from './utils';
+import { fmtMoney, fmtWeight, fmtWeightDelta } from './units';
 
 /* ---------- small helpers shared with the advisor summary ---------- */
 
@@ -118,7 +119,7 @@ export function dailyNudges(data: AppData, today: string, states: BadgeState[] =
     out.push({
       id: 'split',
       kind: 'extra',
-      text: `You logged ${naira(incomeWeek)} this week but no savings transfer yet. Your ${data.money.savePct}% split is ${naira(suggestedSave(incomeWeek, data.money.savePct))}.`,
+      text: `You logged ${fmtMoney(incomeWeek)} this week but no savings transfer yet. Your ${data.money.savePct}% split is ${fmtMoney(suggestedSave(incomeWeek, data.money.savePct))}.`,
       go: 'money',
     });
   }
@@ -135,7 +136,7 @@ export function dailyNudges(data: AppData, today: string, states: BadgeState[] =
   // Planned items due today or in the next two days.
   for (const o of dueSoon(data, today).slice(0, 2)) {
     const when = o.date === today ? 'Due today' : o.date === addDays(today, 1) ? 'Due tomorrow' : `Due ${weekdayName(o.date)}`;
-    out.push({ id: `plan-${o.item.id}-${o.date}`, kind: 'extra', text: `${when}: ${o.item.title}${o.item.amount > 0 ? ` (${naira(o.item.amount)})` : ''}.`, go: 'month' });
+    out.push({ id: `plan-${o.item.id}-${o.date}`, kind: 'extra', text: `${when}: ${o.item.title}${o.item.amount > 0 ? ` (${fmtMoney(o.item.amount)})` : ''}.`, go: 'month' });
   }
 
   // Progression: today's session if it is still to do, otherwise the next one in the week.
@@ -222,9 +223,9 @@ export function weeklyReview(data: AppData, monday: string, today: string, state
     { label: 'Strong days', value: `${strong} of ${daysCounted}` },
     { label: 'Total reps', value: String(reps), note: repsChange == null ? undefined : `${repsChange >= 0 ? '+' : '−'}${Math.abs(repsChange)}% vs the week before` },
     { label: 'Commits', value: String(cs.commits), note: `on ${plural(cs.days, 'day')}` },
-    { label: 'Spent', value: naira(spent), note: spentChange == null ? undefined : `${spentChange >= 0 ? '+' : '−'}${Math.abs(spentChange)}% vs the week before` },
-    { label: 'Saved', value: naira(saved), note: income > 0 ? `from ${naira(income)} received` : undefined },
-    { label: 'Weight', value: weighIn ? `${weighIn.weight} kg` : 'No weigh-in', note: weightDelta == null ? undefined : `${signed(weightDelta)} kg since the last one` },
+    { label: 'Spent', value: fmtMoney(spent), note: spentChange == null ? undefined : `${spentChange >= 0 ? '+' : '−'}${Math.abs(spentChange)}% vs the week before` },
+    { label: 'Saved', value: fmtMoney(saved), note: income > 0 ? `from ${fmtMoney(income)} received` : undefined },
+    { label: 'Weight', value: weighIn ? fmtWeight(weighIn.weight) : 'No weigh-in', note: weightDelta == null ? undefined : `${fmtWeightDelta(weightDelta)} since the last one` },
   ];
 
   const wins: string[] = [];
@@ -249,7 +250,7 @@ export function weeklyReview(data: AppData, monday: string, today: string, state
   else if (complete) open.push(cs.days === 0 ? 'No commits this week.' : `Commits on only ${plural(cs.days, 'day')}.`);
 
   // money
-  if (saved > 0) wins.push(`Moved ${naira(saved)} into savings.`);
+  if (saved > 0) wins.push(`Moved ${fmtMoney(saved)} into savings.`);
   else open.push(complete ? 'No savings transfer this week, which also blocks the weekly reward.' : 'No savings transfer yet; it is needed for the weekly reward.');
   if (complete && loggedDays >= 6) wins.push(`Spending logged on ${loggedDays} of 7 days, so the numbers are trustworthy.`);
   else if (complete && loggedDays < 5) open.push(`Spending logged on only ${loggedDays} of 7 days, so the picture is partial.`);
@@ -265,7 +266,7 @@ export function weeklyReview(data: AppData, monday: string, today: string, state
 
   // focus, at most three, in order of what blocks the most
   if (sessions < 3) focus.push(complete ? 'Protect all three sessions: block Monday, Wednesday and Friday in your calendar.' : 'Finish the remaining session(s) this week.');
-  if (saved === 0) focus.push(income > 0 ? `Move your split (${naira(suggestedSave(income, data.money.savePct))}) into savings as soon as money lands.` : 'Move even ₦500 into savings early in the week so the reward stays in reach.');
+  if (saved === 0) focus.push(income > 0 ? `Move your split (${fmtMoney(suggestedSave(income, data.money.savePct))}) into savings as soon as money lands.` : 'Move even a small amount into savings early in the week so the reward stays in reach.');
   if (ready.length > 0) focus.push(`Add load next session on ${ready.slice(0, 3).join(', ').toLowerCase()}.`);
   if (complete && cs.days < 4) focus.push('Aim for commits on at least four days; one small commit is enough to count.');
   if (complete && loggedDays < 5) focus.push('Log spending every day, even "spent nothing", so your survival target uses real numbers.');

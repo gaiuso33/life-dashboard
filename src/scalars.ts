@@ -17,6 +17,7 @@ export const SCALARS: Record<string, Scalar> = {
   survivalOpening: mk((d) => d.money.survivalOpening, (d, v) => ({ ...d, money: { ...d.money, survivalOpening: v } })),
   categories: mk((d) => d.money.categories, (d, v) => ({ ...d, money: { ...d.money, categories: v } })),
   goalWeight: mk((d) => d.goalWeight, (d, v) => ({ ...d, goalWeight: v })),
+  prefs: mk((d) => d.prefs, (d, v) => ({ ...d, prefs: v })),
   program: mk((d) => d.program, (d, v) => ({ ...d, program: v })),
   goalCount: mk((d) => d.career.goalCount, (d, v) => ({ ...d, career: { ...d.career, goalCount: v } })),
   deadline: mk((d) => d.career.deadline, (d, v) => ({ ...d, career: { ...d.career, deadline: v } })),

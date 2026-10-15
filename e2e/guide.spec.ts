@@ -14,7 +14,7 @@ test('a new person gets a checklist that ticks itself, and reminders download as
   // a real action ticks its step
   await guide.getByRole('button', { name: 'Open money' }).click();
   await page.getByRole('button', { name: 'Import a statement' }).waitFor();
-  await page.getByLabel('Amount in naira').fill('1500');
+  await page.getByRole('textbox', { name: 'Amount', exact: true }).fill('1500');
   await page.getByRole('radio', { name: 'Food' }).click();
   await page.getByRole('button', { name: 'Save entry' }).click();
   await page.getByRole('button', { name: 'Today' }).first().click();
