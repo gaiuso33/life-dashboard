@@ -136,7 +136,7 @@ export function sanitize(input: AppData): AppData {
   const program = p.program != null && programError(p.program as never) == null ? (p.program as AppData['program']) : undefined;
   const cats = strings(money.categories);
   const rawPrefs = obj(p.prefs);
-  const prefs = isCurrency(rawPrefs.currency) && (rawPrefs.weightUnit === 'kg' || rawPrefs.weightUnit === 'lb') ? { currency: rawPrefs.currency, weightUnit: rawPrefs.weightUnit as 'kg' | 'lb' } : undefined;
+  const prefs = isCurrency(rawPrefs.currency) && (rawPrefs.weightUnit === 'kg' || rawPrefs.weightUnit === 'lb') ? { currency: rawPrefs.currency, weightUnit: rawPrefs.weightUnit as 'kg' | 'lb', lengthUnit: rawPrefs.lengthUnit === 'in' ? ('in' as const) : ('cm' as const) } : undefined;
 
   const out: AppData = {
     version: 1,

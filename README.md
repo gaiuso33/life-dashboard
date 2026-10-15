@@ -1,4 +1,4 @@
-# Personal Life Dashboard — Product Spec (v0.19)
+# Personal Life Dashboard — Product Spec (v0.20)
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -167,7 +167,7 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 144 unit tests (incl. the statement importer, reminders, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm test`: 147 unit tests (incl. the statement importer, reminders, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
 - `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 59 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
@@ -229,6 +229,6 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 - **The AI advisor** is told the currency and weight unit and receives weights already in that unit, still numbers only.
 - **Statement import** now reads any currency sign or code ($ £ € ₹ NGN USD Rs, etc.).
 - The choice is one setting that syncs between devices like the others (the latest change wins).
-- Not done: measurements are still in centimetres, training loads are whatever the person types, the bank-merchant words used to guess spending categories are Nigerian-leaning, and the app is in English only.
+- Not done: body measurements follow the same choice as weight (inches in the US, Liberia and Myanmar, centimetres elsewhere, changeable in Settings and stored in centimetres), but training loads are whatever the person types, the bank-merchant words used to guess spending categories are Nigerian-leaning, and the app is in English only.
 
 **Also fixed here:** on phones the first-run setup card was split into two squashed columns by a rule meant for list rows; it is now one column.

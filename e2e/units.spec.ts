@@ -14,7 +14,7 @@ const device = async (browser: Browser, opts: { timezoneId: string; locale: stri
 };
 const startSetup = (p: Page) => p.getByRole('button', { name: 'Set up my dashboard' }).click();
 const next = (p: Page) => p.getByRole('button', { name: 'Next', exact: true }).click();
-const prefs = async (p: Page) => ((await stored(p)) as { prefs?: { currency: string; weightUnit: string } }).prefs;
+const prefs = async (p: Page) => ((await stored(p)) as { prefs?: { currency: string; weightUnit: string; lengthUnit: string } }).prefs;
 
 test('someone in the United States gets dollars and pounds, and what they type is stored in kilograms', async ({ browser }) => {
   const { ctx, page, errors } = await device(browser, { timezoneId: 'America/Chicago', locale: 'en-US' });
@@ -36,7 +36,7 @@ test('someone in the United States gets dollars and pounds, and what they type i
   await page.getByRole('button', { name: 'Open my dashboard' }).click();
   await page.getByText('Today’s plates').waitFor();
 
-  await expect.poll(() => prefs(page)).toEqual({ currency: 'USD', weightUnit: 'lb' });
+  await expect.poll(() => prefs(page)).toEqual({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
   const body = ((await stored(page)) as { body: { weight: number }[]; goalWeight: number }).body;
   expect(body[0].weight).toBeCloseTo(68.04, 1); // 150 lb, kept in kilograms
   expect(((await stored(page)) as { goalWeight: number }).goalWeight).toBeCloseTo(74.84, 1);
@@ -45,6 +45,14 @@ test('someone in the United States gets dollars and pounds, and what they type i
   await page.getByRole('button', { name: 'Body', exact: true }).first().click();
   await expect(page.getByText('Weight (lb)')).toBeVisible();
   await expect(page.getByText('165 lb').first()).toBeVisible();
+
+  // measurements are in inches too, and kept in centimetres
+  await expect(page.getByText('Waist (in)')).toBeVisible();
+  await page.getByLabel('Weight (lb)').fill('152');
+  await page.getByLabel('Waist (in)').fill('34');
+  await page.getByRole('button', { name: 'Save weigh-in' }).click();
+  await expect.poll(async () => ((await stored(page)) as { body: { m: { waist?: number } }[] }).body.at(-1)?.m.waist).toBeCloseTo(86.36, 1);
+  await expect(page.getByRole('cell', { name: '34 in' })).toBeVisible();
 
   // money is in dollars
   await page.getByRole('button', { name: 'Money', exact: true }).first().click();
@@ -67,8 +75,14 @@ test('someone in the United States gets dollars and pounds, and what they type i
   await page.getByRole('button', { name: 'Body', exact: true }).first().click();
   await expect(page.getByText('Weight (kg)')).toBeVisible();
   await expect(page.getByText('74.8 kg').first()).toBeVisible();
-  expect(((await stored(page)) as { body: { weight: number }[] }).body[0].weight).toBeCloseTo(68.04, 1);
-  await expect.poll(() => prefs(page)).toEqual({ currency: 'GBP', weightUnit: 'kg' });
+  await expect(page.getByText('Waist (in)')).toBeVisible(); // the weight unit and the measurement unit are separate choices
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await page.getByRole('combobox', { name: /^Body measurements/ }).selectOption('cm');
+  await page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await expect(page.getByRole('cell', { name: '86.4 cm' })).toBeVisible();
+  expect(((await stored(page)) as { body: { m: { waist?: number } }[] }).body.at(-1)?.m.waist).toBeCloseTo(86.36, 1);
+  expect(((await stored(page)) as { body: { weight: number }[] }).body[0].weight).toBeCloseTo(68.95, 1); // 152 lb, replacing the same-day weigh-in
+  await expect.poll(() => prefs(page)).toEqual({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
 
   await page.reload();
   await page.getByRole('button', { name: 'Money', exact: true }).first().click();

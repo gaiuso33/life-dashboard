@@ -6,7 +6,7 @@ import { MEASURES } from '../program';
 import { useStore } from '../store';
 import type { MeasureKey } from '../types';
 import { dayNumber, fmtShort, round1, todayKey } from '../utils';
-import { fmtWeight, fromDisplay, toDisplay, toDisplayExact, weightUnit } from '../units';
+import { fmtLength, fmtLengthDelta, fmtWeight, fromDisplay, fromLength, lengthUnit, toDisplay, toDisplayExact, toLength, weightUnit } from '../units';
 
 export function Body() {
   const { data, dispatch } = useStore();
@@ -37,7 +37,7 @@ export function Body() {
     const measures: Partial<Record<MeasureKey, number>> = {};
     for (const { key } of MEASURES) {
       const v = parseFloat(m[key] ?? '');
-      if (Number.isFinite(v) && v > 0) measures[key] = v;
+      if (Number.isFinite(v) && v > 0) measures[key] = fromLength(v);
     }
     dispatch({ t: 'body', entry: { date, weight: w, m: measures } });
     setWeight('');
@@ -81,11 +81,11 @@ export function Body() {
             <div className="measure-grid">
               {MEASURES.map(({ key, label }) => (
                 <label key={key} className="field">
-                  <span>{label} (cm)</span>
+                  <span>{label} ({lengthUnit()})</span>
                   <input
                     inputMode="decimal"
                     value={m[key] ?? ''}
-                    placeholder={latest?.m[key] != null ? String(latest.m[key]) : ''}
+                    placeholder={latest?.m[key] != null ? String(toLength(latest.m[key]!)) : ''}
                     onChange={(e) => setM({ ...m, [key]: e.target.value.replace(',', '.') })}
                   />
                 </label>
@@ -206,14 +206,13 @@ export function Body() {
             <tbody>
               {MEASURES.filter(({ key }) => latest.m[key] != null).map(({ key, label }) => {
                 const start = entries.find((e) => e.m[key] != null)!.m[key]!;
-                const diff = round1(latest.m[key]! - start);
+                const diff = latest.m[key]! - start;
                 return (
                   <tr key={key}>
                     <th scope="row">{label}</th>
-                    <td>{latest.m[key]} cm</td>
+                    <td>{fmtLength(latest.m[key]!)}</td>
                     <td>
-                      {diff >= 0 ? '+' : ''}
-                      {diff} cm
+                      {fmtLengthDelta(diff)}
                     </td>
                   </tr>
                 );

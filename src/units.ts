@@ -5,14 +5,17 @@ import type { AppData } from './types';
 // online, and the person can always change it. Amounts are only relabelled when the currency changes, never converted.
 
 export type WeightUnit = 'kg' | 'lb';
+export type LengthUnit = 'cm' | 'in';
 export interface Prefs {
   /** ISO 4217 code, e.g. NGN, USD. */
   currency: string;
   weightUnit: WeightUnit;
+  /** Body measurements (waist, chest, arms…). Stored in centimetres whatever is shown. */
+  lengthUnit: LengthUnit;
 }
 
 /** What every save from before this setting existed was using. Existing people keep it until they choose otherwise. */
-export const LEGACY_PREFS: Prefs = { currency: 'NGN', weightUnit: 'kg' };
+export const LEGACY_PREFS: Prefs = { currency: 'NGN', weightUnit: 'kg', lengthUnit: 'cm' };
 
 const EUR = 'EUR';
 /** Country → currency. Countries not listed fall back to US dollars and kilograms until the person picks. */
@@ -26,7 +29,7 @@ const REGIONS: Record<string, string> = {
   AU: 'AUD', NZ: 'NZD', AE: 'AED', SA: 'SAR', IL: 'ILS', QA: 'QAR', KW: 'KWD',
 };
 
-/** The few countries where people weigh themselves in pounds. */
+/** The few countries where people weigh themselves in pounds and measure themselves in inches. */
 const POUNDS = new Set(['US', 'LR', 'MM']);
 
 const ZONES: Record<string, string> = {
@@ -83,7 +86,7 @@ export const browserEnv = (): Env => {
   return { timeZone, languages };
 };
 
-const prefsFor = (region: string): Prefs => ({ currency: REGIONS[region], weightUnit: POUNDS.has(region) ? 'lb' : 'kg' });
+const prefsFor = (region: string): Prefs => ({ currency: REGIONS[region], weightUnit: POUNDS.has(region) ? 'lb' : 'kg', lengthUnit: POUNDS.has(region) ? 'in' : 'cm' });
 
 export function detectPrefs(env: Env = browserEnv()): Detected {
   const zone = regionOfZone(env.timeZone);
@@ -92,14 +95,14 @@ export function detectPrefs(env: Env = browserEnv()): Detected {
     const r = regionOfLanguage(l);
     if (r && REGIONS[r]) return { prefs: prefsFor(r), region: r, basis: 'language' };
   }
-  return { prefs: { currency: 'USD', weightUnit: 'kg' }, region: null, basis: 'default' };
+  return { prefs: { currency: 'USD', weightUnit: 'kg', lengthUnit: 'cm' }, region: null, basis: 'default' };
 }
 
 /** What the person is actually using: their choice, else the old default for existing saves, else what their location suggests. */
 export function resolvePrefs(data: Pick<AppData, 'prefs' | 'onboarded'> & { sample?: boolean }, env?: Env): Prefs {
   if (data.prefs) return data.prefs;
   // The sample data's amounts are naira-sized, so they stay naira, but weights follow where the person is.
-  if (data.sample) return { currency: LEGACY_PREFS.currency, weightUnit: detectPrefs(env).prefs.weightUnit };
+  if (data.sample) { const d = detectPrefs(env).prefs; return { currency: LEGACY_PREFS.currency, weightUnit: d.weightUnit, lengthUnit: d.lengthUnit }; }
   return data.onboarded ? LEGACY_PREFS : detectPrefs(env).prefs;
 }
 
@@ -120,7 +123,7 @@ function currencyOk(c: string): boolean {
 let active: Prefs = LEGACY_PREFS;
 let moneyFmt: Intl.NumberFormat | null = null;
 export const setActivePrefs = (p: Prefs) => {
-  if (p.currency !== active.currency || p.weightUnit !== active.weightUnit) moneyFmt = null;
+  if (p.currency !== active.currency) moneyFmt = null;
   active = p;
 };
 export const activePrefs = (): Prefs => active;
@@ -191,3 +194,18 @@ export const weightLimits = () => ({ lo: toDisplay(30), hi: toDisplay(250), unit
 
 /** A whole number grouped the way the device groups digits (naira keeps its familiar commas). */
 export const fmtNumber = (n: number): string => n.toLocaleString(numberLocale(active.currency));
+
+// ---------- body measurements: always stored in centimetres ----------
+
+const CM_PER_IN = 2.54;
+export const lengthUnit = (): LengthUnit => active.lengthUnit;
+/** A stored measurement (cm) in the unit the person uses, to one decimal. */
+export const toLength = (cm: number): number => r1(active.lengthUnit === 'in' ? cm / CM_PER_IN : cm);
+/** What the person typed, in their unit, as centimetres to store (to 0.01 cm so it reads back the same). */
+export const fromLength = (v: number): number => Math.round((active.lengthUnit === 'in' ? v * CM_PER_IN : v) * 100) / 100;
+export const fmtLength = (cm: number): string => `${toLength(cm)} ${active.lengthUnit}`;
+/** A change in a measurement, signed. */
+export const fmtLengthDelta = (cm: number): string => {
+  const v = r1(active.lengthUnit === 'in' ? cm / CM_PER_IN : cm);
+  return `${v >= 0 ? '+' : ''}${v} ${active.lengthUnit}`;
+};
