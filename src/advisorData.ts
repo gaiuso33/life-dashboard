@@ -3,7 +3,7 @@ import { commitStats, loggedSpendDays, plural, readyExercises, repsInWeek, sumTx
 import { commitStreak } from './career';
 import { weekStreak, weeklyRepTotals, weightTrend, suggestedPace } from './derive';
 import { forecasts } from './forecast';
-import { activePrefs, currencyName, toDisplay, toDisplayExact, weightUnit } from './units';
+import { activePrefs, currencyName, lengthUnit, toDisplay, toDisplayExact, toLength, weightUnit } from './units';
 import { CATEGORIES, avgMonthlySpend, fundBalance, monthTotals, monthlySavingPace, survivalTarget } from './money';
 import { MEASURES } from './program';
 import { plansBetween } from './plan';
@@ -30,7 +30,7 @@ const r = round1;
 export function buildSummary(data: AppData, today: string, share: Record<ShareArea, boolean>): Summary {
   const monday = mondayOf(today);
   const prevMonday = addDays(monday, -7);
-  const out: Summary = { asOf: today, weekday: weekdayName(today), currency: `${activePrefs().currency} (${currencyName(activePrefs().currency)})`, weightUnit: weightUnit(), weekStartsOn: monday };
+  const out: Summary = { asOf: today, weekday: weekdayName(today), currency: `${activePrefs().currency} (${currencyName(activePrefs().currency)})`, weightUnit: weightUnit(), lengthUnit: lengthUnit(), weekStartsOn: monday };
   const fc = forecasts(data, today);
 
   if (share.training) {
@@ -57,7 +57,7 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
       for (const { key } of MEASURES) {
         const a = first.m[key];
         const b = latest.m[key];
-        if (a != null && b != null) changes[key] = r(b - a);
+        if (a != null && b != null) changes[key] = r(toLength(b) - toLength(a));
       }
     }
     out.body = {
@@ -67,7 +67,7 @@ export function buildSummary(data: AppData, today: string, share: Record<ShareAr
       weighInsLast8: data.body.slice(-8).map((e) => ({ daysAgo: dayNumber(today) - dayNumber(e.date), weight: toDisplay(e.weight) })),
       trendPerWeek: trend ? Math.round(toDisplayExact(trend.slope) * 100) / 100 : null,
       usualLeanGainRangePerWeek: latest ? [Math.round(toDisplayExact(suggestedPace(latest.weight).low) * 100) / 100, Math.round(toDisplayExact(suggestedPace(latest.weight).high) * 100) / 100] : null,
-      measurementChangeCmSinceFirst: changes,
+      measurementChangeSinceFirst: changes,
       weightForecast: fc.find((f) => f.id === 'weight')?.headline,
     };
   }

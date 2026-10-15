@@ -8,7 +8,7 @@ import { sanitize } from '../sanitize';
 import { buildSetup, defaultAnswers, setupErrors } from '../setup';
 import { emptyData } from '../types';
 import type { BodyEntry } from '../types';
-import { activePrefs, detectPrefs, fmtMoney, fmtWeight, fromDisplay, LEGACY_PREFS, regionOfLanguage, regionOfZone, resolvePrefs, setActivePrefs, toDisplay } from '../units';
+import { activePrefs, detectPrefs, fmtLength, fmtLengthDelta, fmtMoney, fmtWeight, fromDisplay, fromLength, LEGACY_PREFS, toLength, regionOfLanguage, regionOfZone, resolvePrefs, setActivePrefs, toDisplay } from '../units';
 import { addDays } from '../utils';
 
 afterEach(() => setActivePrefs(LEGACY_PREFS));
@@ -16,9 +16,9 @@ const env = (timeZone: string, ...languages: string[]) => ({ timeZone, languages
 
 describe('where the person is', () => {
   it('reads the country from the timezone first', () => {
-    expect(detectPrefs(env('Africa/Lagos', 'en-US')).prefs).toEqual({ currency: 'NGN', weightUnit: 'kg' });
-    expect(detectPrefs(env('America/Chicago', 'en-GB')).prefs).toEqual({ currency: 'USD', weightUnit: 'lb' });
-    expect(detectPrefs(env('Europe/London')).prefs).toEqual({ currency: 'GBP', weightUnit: 'kg' });
+    expect(detectPrefs(env('Africa/Lagos', 'en-US')).prefs).toEqual({ currency: 'NGN', weightUnit: 'kg', lengthUnit: 'cm' });
+    expect(detectPrefs(env('America/Chicago', 'en-GB')).prefs).toEqual({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
+    expect(detectPrefs(env('Europe/London')).prefs).toEqual({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(detectPrefs(env('Europe/Berlin')).prefs.currency).toBe('EUR');
     expect(detectPrefs(env('Asia/Kolkata')).prefs.currency).toBe('INR');
     expect(detectPrefs(env('Australia/Sydney')).prefs.currency).toBe('AUD');
@@ -28,7 +28,7 @@ describe('where the person is', () => {
     expect(detectPrefs(env('Etc/UTC', 'en-GB')).prefs.currency).toBe('GBP');
     expect(detectPrefs(env('', 'fr', 'en-CA')).prefs.currency).toBe('CAD');
     const none = detectPrefs(env('Etc/UTC', 'en'));
-    expect(none.prefs).toEqual({ currency: 'USD', weightUnit: 'kg' });
+    expect(none.prefs).toEqual({ currency: 'USD', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(none.basis).toBe('default');
   });
   it('does not guess a country from a bare language', () => {
@@ -45,49 +45,49 @@ describe('which units a person ends up with', () => {
   });
   it('uses their location for someone brand new, and their own choice over everything', () => {
     expect(resolvePrefs({ onboarded: false }, env('America/Chicago')).currency).toBe('USD');
-    expect(resolvePrefs({ onboarded: true, prefs: { currency: 'GBP', weightUnit: 'kg' } }, env('America/Chicago'))).toEqual({ currency: 'GBP', weightUnit: 'kg' });
+    expect(resolvePrefs({ onboarded: true, prefs: { currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' } }, env('America/Chicago'))).toEqual({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
   });
   it('shows sample data in naira but weighs in the local unit', () => {
-    expect(resolvePrefs({ onboarded: true, sample: true }, env('America/Chicago'))).toEqual({ currency: 'NGN', weightUnit: 'lb' });
+    expect(resolvePrefs({ onboarded: true, sample: true }, env('America/Chicago'))).toEqual({ currency: 'NGN', weightUnit: 'lb', lengthUnit: 'in' });
   });
   it('finishing setup keeps what the person was shown and prices the starting rewards locally', () => {
     const d = buildSetup(emptyData(), { ...defaultAnswers(), keepRewards: true });
     expect(d.prefs).toBeDefined();
-    const us = buildSetup({ ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb' } }, defaultAnswers());
-    expect(us.prefs).toEqual({ currency: 'USD', weightUnit: 'lb' });
+    const us = buildSetup({ ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' } }, defaultAnswers());
+    expect(us.prefs).toEqual({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
     expect(us.rewards.items.length).toBeGreaterThan(0);
     expect(us.rewards.items.some((i) => /₦/.test(i.name))).toBe(false);
     expect(Math.max(...us.rewards.items.map((i) => i.cost))).toBeLessThan(200);
-    const ng = buildSetup({ ...emptyData(), prefs: { currency: 'NGN', weightUnit: 'kg' } }, defaultAnswers());
+    const ng = buildSetup({ ...emptyData(), prefs: { currency: 'NGN', weightUnit: 'kg', lengthUnit: 'cm' } }, defaultAnswers());
     expect(ng.rewards.items).toEqual(defaultItemsFor('NGN'));
   });
   it('does not overwrite rewards the person already edited', () => {
     const base = emptyData();
-    const edited = { ...base, prefs: { currency: 'USD', weightUnit: 'lb' as const }, rewards: { ...base.rewards, items: [{ id: 'mine', name: 'My treat', cost: 5, tier: 'week' as const }] } };
+    const edited = { ...base, prefs: { currency: 'USD', weightUnit: 'lb' as const, lengthUnit: 'in' as const }, rewards: { ...base.rewards, items: [{ id: 'mine', name: 'My treat', cost: 5, tier: 'week' as const }] } };
     expect(buildSetup(edited, defaultAnswers()).rewards.items.map((i) => i.id)).toEqual(['mine']);
   });
 });
 
 describe('money and weight in the active units', () => {
   it('formats the currency chosen, never converting', () => {
-    setActivePrefs({ currency: 'NGN', weightUnit: 'kg' });
+    setActivePrefs({ currency: 'NGN', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(fmtMoney(12500)).toBe('₦12,500');
-    setActivePrefs({ currency: 'USD', weightUnit: 'kg' });
+    setActivePrefs({ currency: 'USD', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(fmtMoney(12500)).toMatch(/^\$12,500$/);
-    setActivePrefs({ currency: 'GBP', weightUnit: 'kg' });
+    setActivePrefs({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(fmtMoney(1250)).toMatch(/^£1,250$/);
   });
   it('converts weight exactly and round-trips what is typed', () => {
-    setActivePrefs({ currency: 'USD', weightUnit: 'lb' });
+    setActivePrefs({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
     expect(toDisplay(68)).toBe(149.9);
     expect(fmtWeight(100)).toBe('220.5 lb');
     for (const lb of [110, 150.5, 187.2, 220]) expect(toDisplay(fromDisplay(lb))).toBe(lb);
-    setActivePrefs({ currency: 'USD', weightUnit: 'kg' });
+    setActivePrefs({ currency: 'USD', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(toDisplay(68.25)).toBe(68.3);
     expect(fromDisplay(68.3)).toBe(68.3);
   });
   it('limits for setup are shown in the person’s unit', () => {
-    setActivePrefs({ currency: 'USD', weightUnit: 'lb' });
+    setActivePrefs({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
     const e = setupErrors({ ...defaultAnswers(), weight: 5 });
     expect(e.weight).toMatch(/lb/);
     expect(e.weight).toMatch(/66/);
@@ -100,7 +100,7 @@ const body = (kg: number[]): BodyEntry[] => kg.map((w, i) => ({ date: addDays('2
 describe('everything the app says follows the units', () => {
   it('the weight forecast speaks pounds when asked, and the same numbers in kilograms', () => {
     const d = { ...emptyData(), body: body([68, 68.3, 68.7, 69, 69.4, 69.7]), goalWeight: 75 };
-    setActivePrefs({ currency: 'USD', weightUnit: 'lb' });
+    setActivePrefs({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
     const lb = weightForecast(d);
     expect(lb.headline).toMatch(/lb in 12 weeks/);
     expect(lb.detail).toMatch(/lb a week/);
@@ -108,7 +108,7 @@ describe('everything the app says follows the units', () => {
     expect(lb.detail).not.toMatch(/\bkg\b/);
     expect(lb.chart!.unit).toBe('lb');
     expect(lb.chart!.goal).toBeCloseTo(75 * 2.20462, 1);
-    setActivePrefs({ currency: 'NGN', weightUnit: 'kg' });
+    setActivePrefs({ currency: 'NGN', weightUnit: 'kg', lengthUnit: 'cm' });
     const kg = weightForecast(d);
     expect(kg.headline).toMatch(/kg in 12 weeks/);
     expect(kg.detail).not.toMatch(/\blb\b/);
@@ -119,14 +119,14 @@ describe('everything the app says follows the units', () => {
     expect(savedSteps('NGN')).toEqual([10000, 50000, 100000]);
     const usd = savedSteps('USD');
     expect(usd).toEqual([10, 50, 100]);
-    setActivePrefs({ currency: 'USD', weightUnit: 'lb' });
+    setActivePrefs({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
     const states = evaluateBadges(emptyData(), '2026-10-09');
     const s = states.find((b) => b.id === 'saved-10k')!;
     expect(s.name).toBe('$10 saved');
     expect(states.find((b) => b.id === 'weigh-first')!.glyph).toBe('lb');
   });
   it('the AI summary names the currency and unit, converts weights, and carries no free text', () => {
-    const d = { ...emptyData(), onboarded: true, body: body([68, 68.4, 68.9]), prefs: { currency: 'GBP', weightUnit: 'lb' as const } };
+    const d = { ...emptyData(), onboarded: true, body: body([68, 68.4, 68.9]), prefs: { currency: 'GBP', weightUnit: 'lb' as const, lengthUnit: 'in' as const } };
     setActivePrefs(d.prefs);
     const j = summaryJson(buildSummary(d, '2026-10-09', { training: true, body: true, money: true, career: true, rewards: true }));
     const out = JSON.parse(j);
@@ -138,22 +138,53 @@ describe('everything the app says follows the units', () => {
   });
 });
 
+describe('body measurements', () => {
+  it('converts inches and centimetres exactly and round-trips what is typed', () => {
+    setActivePrefs({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
+    expect(toLength(88.9)).toBe(35);
+    expect(fmtLength(101.6)).toBe('40 in');
+    expect(fmtLengthDelta(-2.54)).toBe('-1 in');
+    expect(fmtLengthDelta(5.08)).toBe('+2 in');
+    for (const inches of [30, 34.5, 41.2, 15.5]) expect(toLength(fromLength(inches))).toBe(inches);
+    setActivePrefs({ currency: 'NGN', weightUnit: 'kg', lengthUnit: 'cm' });
+    expect(toLength(88.9)).toBe(88.9);
+    expect(fmtLengthDelta(-2.5)).toBe('-2.5 cm');
+  });
+  it('Americans get inches with pounds, and everyone else centimetres, but each can be changed on its own', () => {
+    expect(detectPrefs(env('America/Chicago')).prefs.lengthUnit).toBe('in');
+    expect(detectPrefs(env('Europe/London')).prefs.lengthUnit).toBe('cm');
+    expect(detectPrefs(env('Africa/Lagos')).prefs.lengthUnit).toBe('cm');
+    expect(sanitize({ ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' } }).prefs).toEqual({ currency: 'USD', weightUnit: 'lb', lengthUnit: 'in' });
+    // a save with a unit we don't know falls back to centimetres rather than being thrown away
+    expect(sanitize({ ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb', lengthUnit: 'furlong' } as never }).prefs?.lengthUnit).toBe('cm');
+    expect(sanitize({ ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb' } as never }).prefs?.lengthUnit).toBe('cm');
+  });
+  it('the AI summary reports measurement changes in the person’s unit', () => {
+    const d = { ...emptyData(), onboarded: true, prefs: { currency: 'USD', weightUnit: 'lb' as const, lengthUnit: 'in' as const },
+      body: [{ date: '2026-08-01', weight: 70, m: { waist: 91.44 } }, { date: '2026-10-01', weight: 71, m: { waist: 88.9 } }] as never };
+    setActivePrefs(d.prefs);
+    const out = JSON.parse(summaryJson(buildSummary(d, '2026-10-09', { training: true, body: true, money: true, career: true, rewards: true })));
+    expect(out.lengthUnit).toBe('in');
+    expect(out.body.measurementChangeSinceFirst.waist).toBe(-1);
+  });
+});
+
 describe('the choice is saved, merged and cleaned like any other setting', () => {
   it('sanitize keeps a valid choice and drops a bad one', () => {
-    const ok = sanitize({ ...emptyData(), prefs: { currency: 'EUR', weightUnit: 'lb' } });
-    expect(ok.prefs).toEqual({ currency: 'EUR', weightUnit: 'lb' });
-    for (const bad of [{ currency: 'euro', weightUnit: 'kg' }, { currency: 'EUR', weightUnit: 'stone' }, { currency: 'ZZZ1', weightUnit: 'kg' }, 'x', 5]) {
+    const ok = sanitize({ ...emptyData(), prefs: { currency: 'EUR', weightUnit: 'lb', lengthUnit: 'in' } });
+    expect(ok.prefs).toEqual({ currency: 'EUR', weightUnit: 'lb', lengthUnit: 'in' });
+    for (const bad of [{ currency: 'euro', weightUnit: 'kg', lengthUnit: 'cm' }, { currency: 'EUR', weightUnit: 'stone' }, { currency: 'ZZZ1', weightUnit: 'kg', lengthUnit: 'cm' }, 'x', 5]) {
       expect(sanitize({ ...emptyData(), prefs: bad as never }).prefs).toBeUndefined();
     }
   });
   it('the most recent choice wins when two devices disagree', () => {
-    const a = { ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb' as const }, stamps: { prefs: '2026-10-10T10:00:00.000Z' } };
-    const b = { ...emptyData(), prefs: { currency: 'GBP', weightUnit: 'kg' as const }, stamps: { prefs: '2026-10-11T10:00:00.000Z' } };
-    expect(mergeData(a, b).prefs).toEqual({ currency: 'GBP', weightUnit: 'kg' });
-    expect(mergeData(b, a).prefs).toEqual({ currency: 'GBP', weightUnit: 'kg' });
+    const a = { ...emptyData(), prefs: { currency: 'USD', weightUnit: 'lb' as const, lengthUnit: 'in' as const }, stamps: { prefs: '2026-10-10T10:00:00.000Z' } };
+    const b = { ...emptyData(), prefs: { currency: 'GBP', weightUnit: 'kg' as const, lengthUnit: 'cm' as const }, stamps: { prefs: '2026-10-11T10:00:00.000Z' } };
+    expect(mergeData(a, b).prefs).toEqual({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
+    expect(mergeData(b, a).prefs).toEqual({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
   });
   it('the active units are the ones set from the data', () => {
-    setActivePrefs({ currency: 'JPY', weightUnit: 'kg' });
+    setActivePrefs({ currency: 'JPY', weightUnit: 'kg', lengthUnit: 'cm' });
     expect(activePrefs().currency).toBe('JPY');
     expect(fmtMoney(1500)).toMatch(/1,500/);
   });

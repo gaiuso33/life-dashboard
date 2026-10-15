@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useStore } from '../store';
 import { allCurrencies, currencyName, currencySymbol, detectPrefs, resolvePrefs } from '../units';
-import type { WeightUnit } from '../units';
+import type { LengthUnit, WeightUnit } from '../units';
 
 const REGION_NAMES = (() => {
   try {
@@ -22,7 +22,7 @@ export function RegionUnits({ show = 'both' }: { show?: 'both' | 'currency' | 'w
   }, [detected]);
   const set = (p: Partial<typeof prefs>) => dispatch({ t: 'prefs', value: { ...prefs, ...p } });
   const where = detected.region ? (REGION_NAMES?.of(detected.region) ?? detected.region) : null;
-  const matches = detected.prefs.currency === prefs.currency && detected.prefs.weightUnit === prefs.weightUnit;
+  const matches = detected.prefs.currency === prefs.currency && detected.prefs.weightUnit === prefs.weightUnit && detected.prefs.lengthUnit === prefs.lengthUnit;
 
   return (
     <div className="region">
@@ -47,6 +47,15 @@ export function RegionUnits({ show = 'both' }: { show?: 'both' | 'currency' | 'w
             <select value={prefs.weightUnit} onChange={(e) => set({ weightUnit: e.target.value as WeightUnit })}>
               <option value="kg">Kilograms (kg){detected.prefs.weightUnit === 'kg' && detected.basis !== 'default' ? ' (suggested)' : ''}</option>
               <option value="lb">Pounds (lb){detected.prefs.weightUnit === 'lb' ? ' (suggested)' : ''}</option>
+            </select>
+          </label>
+        )}
+        {show === 'both' && (
+          <label className="field">
+            <span>Body measurements</span>
+            <select value={prefs.lengthUnit} onChange={(e) => set({ lengthUnit: e.target.value as LengthUnit })}>
+              <option value="cm">Centimetres (cm){detected.prefs.lengthUnit === 'cm' && detected.basis !== 'default' ? ' (suggested)' : ''}</option>
+              <option value="in">Inches (in){detected.prefs.lengthUnit === 'in' ? ' (suggested)' : ''}</option>
             </select>
           </label>
         )}
