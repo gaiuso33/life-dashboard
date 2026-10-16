@@ -6,4 +6,6 @@ run('npx vite build --outDir dist-e2e-cloud --emptyOutDir', {
   VITE_SUPABASE_URL: 'http://localhost:4600',
   VITE_SUPABASE_ANON_KEY: 'test-anon',
   VITE_SYNC_MIN_GAP_MS: '300',
+  // A throwaway public key (the matching private key was never kept), only so the push controls appear in this build.
+  VITE_VAPID_PUBLIC_KEY: 'BPLX3XQRsDod-GwDLooEdvakkrLS2JnwXyg80alRpuKRLaBy1EB3UYW-u3i_f73ujc3fc5gJiXrccNEsOHK_6ic',
 });
