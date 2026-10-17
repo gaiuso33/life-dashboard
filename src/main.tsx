@@ -6,6 +6,7 @@ import { CloudProvider } from './cloud/CloudProvider';
 import { isDemo, MemoryRepository } from './demo';
 import { startInstallWatch } from './install';
 import { StoreProvider } from './store';
+import { startUpdates } from './updates';
 import './fonts/fonts.css';
 import './styles.css';
 
@@ -24,6 +25,4 @@ createRoot(document.getElementById('root')!).render(
 );
 
 // Offline support and installing to the home screen only work when the page is served over http(s), not opened as a file.
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => void navigator.serviceWorker.register('./sw.js').catch(() => undefined));
-}
+startUpdates();

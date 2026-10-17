@@ -17,9 +17,17 @@ const rewrites = Object.fromEntries((config.rewrites ?? []).map((r) => [r.source
 const redirects = Object.fromEntries((config.redirects ?? []).map((r) => [r.source, r.destination]));
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
+// Test hook: GET /__bump makes sw.js and the page differ from now on, like a new deploy would, so update behaviour can be tested.
+let bumps = 0;
+
 http
   .createServer((req, res) => {
     const raw = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (raw === '/__bump') {
+      bumps++;
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      return res.end(String(bumps));
+    }
     if (redirects[raw]) {
       res.writeHead(307, { location: redirects[raw] + new URL(req.url, 'http://x').search });
       return res.end();
@@ -31,6 +39,9 @@ http
       return res.end('not found');
     }
     res.writeHead(200, { ...headers, 'content-type': types[path.extname(file)] ?? 'application/octet-stream' });
-    res.end(fs.readFileSync(file));
+    let body = fs.readFileSync(file);
+    if (bumps && raw === '/sw.js') body = Buffer.concat([body, Buffer.from(`\n// bump ${bumps}\n`)]);
+    else if (bumps && file.endsWith('.html')) body = Buffer.from(body.toString('utf8').replace('<head>', `<head><meta name="bump" content="${bumps}">`));
+    res.end(body);
   })
   .listen(Number(port), () => console.log(`serving ${dir} on ${port}`));

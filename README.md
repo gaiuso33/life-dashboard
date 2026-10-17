@@ -165,8 +165,8 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 175 unit tests (incl. the statement importer, reminders, push scheduling, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 64 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 179 unit tests (incl. the statement importer, reminders, push scheduling, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 69 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, new versions reaching an installed app, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -257,3 +257,20 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 **Not verified.** Actual delivery to a real phone, the Supabase scheduler calling the deployed function, and the Vercel environment (a headless browser cannot create a real push subscription). Check these once after setup with "Send a test", then wait for a real reminder.
 - Only the four reminders exist; there are no event-based notifications (for example "streak at risk").
 - A device that has not opened the app since its time zone changed keeps the old zone until it does.
+
+## 27. How a new version reaches an installed app (built)
+
+**The problem this fixed.** The installed app kept showing the old version after a deploy. Three things caused it: the service worker showed its saved copy of the app first and only refreshed in the background, so a new version appeared on the *second* launch; a phone app is usually put away rather than closed, so there was rarely a second launch; and `sw.js` was byte-for-byte the same after an app-only deploy, so the browser had no reason to look for a new one.
+
+**How it works now.**
+- `vite.config.ts` writes a different build id into `sw.js` on every build (Vercel's commit id when there is one, otherwise the build time). A deploy therefore always changes the file, and the browser installs the new worker.
+- Opening the app is network first (`public/sw.js`): the newest version is fetched every time, and the saved copy is used only when offline, when the server errors, or when the network takes longer than 4 seconds.
+- `src/updates.ts` asks the browser to look for a new version when the app comes back to the front, when the phone goes back online, and every 30 minutes while it is open (never more than once a minute).
+- When the new version has installed, a banner says "A new version is ready" with an **Update now** button. Nothing reloads by itself, so nobody loses what they are typing. Everything logged is kept (it lives in localStorage, which a reload never touches).
+- The first ever install is not announced as an update.
+
+**A phone that still has the old service worker** (installed before this change) needs one more launch to pick it up: close the app completely, open it, wait a few seconds, close it, and open it again. After that, updates arrive by themselves. Do **not** remove and re-add the app on an iPhone to force it, because that can clear its saved data. Use Sync and backup first if you are unsure.
+
+**Checked by tests.** `e2e/updates.spec.ts` runs with service workers on: the build stamp is present, the first install shows no banner, a new deploy shows the banner and "Update now" loads it, the newest page is used on the very first reload, and the saved copy still opens offline. `src/__tests__/updates.test.ts` covers the once-a-minute limit.
+
+**Not verified.** How a particular phone treats a put-away app (some keep it frozen for days). The banner appears as soon as the app is brought back to the front and the browser has had a moment to check.

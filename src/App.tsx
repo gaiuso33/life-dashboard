@@ -22,6 +22,7 @@ import type { Tab, TrainView } from './nav';
 import { nextSession, plannedFor } from './derive';
 import { agoText, daysAgo, lastExport } from './sync';
 import { useStore } from './store';
+import { useUpdateReady } from './updates';
 import { addDays, todayKey } from './utils';
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -44,6 +45,7 @@ export function App() {
   const { data, ready, dispatch, saveFailed, recovery } = useStore();
   const cloud = useCloud();
   const install = useInstall();
+  const updateReady = useUpdateReady();
   const [syncOpen, setSyncOpen] = useState(!!cloud.resetToken);
   const [tab, setTab] = useState<Tab>('today');
   const [tour, setTour] = useState<number | null>(tourWanted ? 0 : null);
@@ -101,6 +103,16 @@ export function App() {
       </aside>
 
       <main className="main">
+        {updateReady && (
+          <div className="banner update" role="status">
+            <p>
+              <b>A new version is ready.</b> Reload to use it. Everything you have logged is kept.
+            </p>
+            <button className="btn primary" onClick={() => window.location.reload()}>
+              Update now
+            </button>
+          </div>
+        )}
         {saveFailed && (
           <div className="banner warn" role="alert">
             <p>Your latest changes couldn’t be saved on this device. Storage may be full, or the browser may be blocking it (private windows do this). Download a copy so nothing is lost.</p>

@@ -518,6 +518,7 @@ select:hover { border-color: var(--steel-3); }
 
 /* ---------- resilience ---------- */
 .banner.warn { border-color: var(--plate-yellow); color: var(--chalk); }
+.banner.update { border-color: var(--plate-green); color: var(--chalk); }
 .crash { width: min(620px, 100%); display: grid; gap: 14px; }
 .crash h1 { font-family: var(--display); font-size: clamp(28px, 5vw, 40px); line-height: 1.05; }
 
