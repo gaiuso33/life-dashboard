@@ -30,7 +30,7 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - **Accounts:** OPay is the main account.
 - **Ingest:**
   1. Fast manual logger: amount, tap a category, optional note (built).
-  2. OPay statement import (CSV/XLSX): planned. Needs one sample statement export so the column mapping can be matched exactly.
+  2. OPay statement import: scrapped. OPay never sent a statement to match the columns against. The generic CSV import (section 19) reads statements from any bank or wallet, and manual logging stays the main path.
   - **Bank link via Mono: dropped.** Mono asks for a registered business name and email, which doesn't fit a personal project. Revisit only if the app becomes a real product.
 - **Categories:** Food, Transport, Data/Airtime, Housing, Personal care, Health/Gym, Giving, Entertainment, Savings transfers, Rewards, Other. Each transaction can be tagged and re-tagged; rules learn from past tags (e.g. a recurring merchant maps to a category).
 - **Income log:** income is irregular, so every income entry triggers a suggested savings split (percentage-based).
@@ -90,15 +90,13 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 3. **Money (manual):** fast logger, categories, income split, survival fund tracking. *(done)*
 4. **Career:** GitHub sync, 5-project tracker, learning log. *(done)*
 5. **Gamification:** streaks, badges, reward tiers, claim flow. *(done)*
-6. **OPay statement import** (replaces the dropped Mono bank link).
+6. **OPay statement import:** scrapped (no sample statement was ever available). The generic CSV import replaces it.
 7. **AI advisor and forecasts.** *(done: rules-based coach, weekly review, trend forecasts, optional Claude chat and written review)*
 8. **Hardening for pitch:** sync, accounts, onboarding for other users, analytics.
 
 ## 7. Open items
-- OPay statement import: needs a sample statement export (with personal details removed) to match the columns.
 - GitHub sync reads public commits on default branches only, for the last 90 days. Private repositories and other branches don't appear, so the Today screen keeps a manual "mark done" for coding days.
-- Reminders: first version uses in-app prompts when the app is opened; push notifications need extra setup.
-- Phone-laptop data merge approach (export/import first; import button not built yet).
+- Push notifications are built (section 26) but have not been tried on a real phone yet.
 
 ## 8. Advisor (built)
 - Works offline without a key: daily nudges, weekly review (this week so far or last week), trend forecasts for weight, survival fund, portfolio pace and training volume.
@@ -134,7 +132,7 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - Setup has five short steps: training days (push, pull and legs on three different weekdays), starting weight and goal weight, money (rough daily spending, amount already in the survival fund, share of income to save), career goal (number of projects, deadline, GitHub username) and the reward menu (example menu or empty). Every answer is optional or has a default, is checked before moving on, and can be changed later in Settings.
 - "Start fresh" from sample data and "Erase everything" in Settings lead back to the welcome screen. Anyone with data saved before this existed skips it (`onboarded` defaults to true for older saves).
 - Setup values are stamped like any other setting, so they take part in device merges correctly.
-- Not yet: the Claude API key and the OPay statement import are not part of setup.
+- Not part of setup: the Claude API key (added later in the Advisor).
 
 ## 13. Hardening (built)
 - **Damaged data**: every load passes through `sanitize.ts`, which drops invalid records instead of crashing. If the saved file cannot be parsed at all, a recovery screen offers: download the unreadable data, restore the automatic daily backup, import an earlier export, or start empty. The unreadable copy is never overwritten.
@@ -143,8 +141,8 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - **Crashes**: an error boundary around each screen keeps the rest of the app usable; an app-level boundary offers Download my data and Restore the last backup.
 - **Accessibility**: automated axe-core audit (WCAG 2 A/AA) is clean on every screen at desktop width. Not yet checked with a real screen reader.
 - **Security headers**: `vercel.json` sets a CSP (inline scripts are still allowed because the build is a single inlined file), nosniff, no-referrer and a restrictive Permissions-Policy.
-- **Tests**: `npm test` runs 41 unit tests (merge, plan, advisor, setup, resilience incl. a seeded corruption fuzz). GitHub Actions runs typecheck, tests and build on every push.
-- **Not done**: accounts and cloud sync, real-device testing, live AI API check.
+- **Tests**: see section 16. GitHub Actions runs typecheck, tests and build on every push.
+- **Not done**: real-device testing (see section 24).
 
 ## 14. Accounts and cloud sync (built, needs a Supabase project)
 **What it does.** Sign in on any device and the dashboard keeps itself in step: edits go up a few seconds after you stop, other devices are checked when you return to the app, go back online, and every minute while it is open. The file export/import still works and is the fallback.
@@ -167,8 +165,8 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 147 unit tests (incl. the statement importer, reminders, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 59 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 175 unit tests (incl. the statement importer, reminders, push scheduling, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 64 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -182,7 +180,7 @@ Barlow and Barlow Condensed (SIL Open Font License) are bundled into the app, so
 
 ## 19. Statement import
 
-Money → "Import a statement" reads a CSV exported from any bank or wallet app (no bank-specific code; OPay-specific import is on ice).
+Money → "Import a statement" reads a CSV exported from any bank or wallet app (no bank-specific code; the OPay-specific import was scrapped).
 - Detects delimiter, the header row, and the columns (separate debit/credit or one signed amount); you can correct each guess, plus day-first or month-first dates.
 - Understands ₦, 1,234.56, 1.234,56, (500), 500- and DR/CR. Rows that don't fit the columns are left out and counted, never guessed.
 - Review step: per-row Spent / Received / Saved / Don't import and category. Transfers into savings are marked Saved; money returning from savings is not imported by default.
@@ -201,7 +199,7 @@ Sync and backup → "Delete my account" removes the sign-in and the encrypted co
 
 **Getting-started checklist** on Today for new people: first plate, a money entry, a project or GitHub, reminders, install (left out where installing is impossible) and backup. Each step ticks itself from what the person has really done, has a button that goes to the right place, and the whole card can be hidden (remembered per device). It never shows in the demo or on sample data.
 
-**Reminders** (Settings): daily check-in, training days (from the person's own programme), spending log, weekly review, each with its own time. The app makes a calendar file (`.ics`) with repeating events and an alert on each, which the person adds to their phone's calendar. The calendar then does the reminding with the app closed, and nothing is sent to any server. Times are "floating", so they stay at the same clock time when travelling. Not built: true push notifications. Those need a server that holds each person's push subscription and sends on a schedule (and the content security policy and service worker would need extending), so they only make sense once there are real users.
+**Reminders** (Settings): daily check-in, training days (from the person's own programme), spending log, weekly review, each with its own time. The app makes a calendar file (`.ics`) with repeating events and an alert on each, which the person adds to their phone's calendar. The calendar then does the reminding with the app closed, and nothing is sent to any server. Times are "floating", so they stay at the same clock time when travelling. Reminders can also arrive as real push notifications, which work with the app closed and without the calendar (section 26). Using both means being reminded twice, so Settings tells the person to pick one.
 
 ## 23. Forecasting with honest ranges
 
@@ -232,3 +230,30 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 - Not done: body measurements follow the same choice as weight (inches in the US, Liberia and Myanmar, centimetres elsewhere, changeable in Settings and stored in centimetres), but training loads are whatever the person types, the bank-merchant words used to guess spending categories are Nigerian-leaning, and the app is in English only.
 
 **Also fixed here:** on phones the first-run setup card was split into two squashed columns by a rule meant for list rows; it is now one column.
+
+## 26. Push notifications (built, needs setup)
+
+**What it does.** Settings → Reminders has a "Push notifications" box. Once switched on for a device, the phone or laptop receives the same four reminders (check-in, training day, spending log, weekly review) at the chosen times, even with the app closed. Tapping one opens the app. Each device is switched on separately and needs an account, so the server knows where to send.
+
+**What the server knows.** One row per device in `push_subscriptions`: the browser's push address and keys, the device's time zone, and the reminder times with fixed generic wording ("Time to check in"). It never sees the encrypted vault or anything logged, and the wording never contains an exercise name, an amount or a note. Rows are protected by row-level rules so a person can only touch their own devices. Signing out, deleting the account or turning push off removes the device's row.
+
+**How it runs.**
+- `src/push.ts` asks permission (only from a tap), subscribes the device, and keeps the server's copy current after a sync or when the times, programme days or time zone change.
+- `public/sw.js` shows each push and opens the app when tapped.
+- `api/push.ts` is one Vercel function with two callers. Supabase's scheduler calls it every minute with the shared `CRON_SECRET`; it works out which reminders are due in each device's *own* time zone and sends them. A signed-in person calls it with their own session token to send a test to their own devices.
+- A reminder goes out once per local day. If a send fails it is retried each minute for 15 minutes, then dropped rather than arriving hours late. A push address the browser reports as dead is deleted.
+
+**Setting it up (once).**
+1. Make a key pair: `npx web-push generate-vapid-keys`.
+2. In Vercel, add the environment variables: `VITE_VAPID_PUBLIC_KEY` (the public key; the app reads it at build time), and server-only `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` your email), `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API; it bypasses all row rules, so never put it in a `VITE_` variable) and `CRON_SECRET` (a long random string).
+3. Redeploy, so the public key is built into the app.
+4. In the Supabase SQL editor run `supabase/push.sql`. Then enable the `pg_cron` and `pg_net` extensions (Database → Extensions) and run the commented `cron.schedule` block at the bottom of that file, with your app address and the same `CRON_SECRET`.
+5. On each device: Settings → Reminders → Turn on for this device → Send a test.
+
+**iPhone and iPad.** Push only works once the app is added to the Home Screen and opened from there; until then the browser hides the feature, and Settings explains this.
+
+**Checked by tests.** `src/__tests__/push.test.ts` covers the scheduling (time zones, weekday rollover, once-a-day, the late window, midnight, broken data, many devices, dead addresses, retries) and the secret comparison. `e2e/push.spec.ts` covers the Settings states: not set up, demo, signed out, signed in, permission refused, and no working service worker (it gives up with a message instead of hanging). `api/` is part of the typecheck.
+
+**Not verified.** Actual delivery to a real phone, the Supabase scheduler calling the deployed function, and the Vercel environment (a headless browser cannot create a real push subscription). Check these once after setup with "Send a test", then wait for a real reminder.
+- Only the four reminders exist; there are no event-based notifications (for example "streak at risk").
+- A device that has not opened the app since its time zone changed keeps the old zone until it does.

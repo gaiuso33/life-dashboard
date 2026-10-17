@@ -7,6 +7,9 @@ import { deriveKey, newSalt, stable } from './crypto';
 import { syncOnce } from './engine';
 import type { Keys } from './engine';
 import { forgetKeys, recallKey, rememberKey } from './keystore';
+import { getProgram } from '../program';
+import { currentSubscription, refreshPush, unsubscribeThisDevice } from '../push';
+import type { PushRow } from '../push';
 
 export type CloudStatus = 'off' | 'signed-out' | 'locked' | 'idle' | 'syncing' | 'offline' | 'error';
 
@@ -33,6 +36,10 @@ interface CloudCtx {
   deleteCloudCopy: () => Promise<void>;
   /** Deletes the account and its cloud copy. Data on this device is kept. */
   deleteAccount: () => Promise<void>;
+  /** Push notifications for this device. Each needs a signed-in account. */
+  savePush: (row: PushRow) => Promise<void>;
+  removePush: () => Promise<void>;
+  testPush: () => Promise<{ sent: number; devices: number }>;
 }
 
 const Ctx = createContext<CloudCtx | null>(null);
@@ -55,6 +62,17 @@ const write = (k: string, v: string | null) => {
     /* ignore */
   }
 };
+
+/** Best effort: switch this device's push off and remove the server's copy, without ever blocking a sign-out. */
+async function removePushQuietly(api: CloudApi | null) {
+  try {
+    const sub = await currentSubscription();
+    const endpoint = await unsubscribeThisDevice();
+    if (api?.session && (endpoint ?? sub?.endpoint)) await api.deletePush((endpoint ?? sub?.endpoint)!);
+  } catch {
+    /* offline or not set up: nothing to undo */
+  }
+}
 
 /** A reset email sends the person back with the token in the address; take it and tidy the address. */
 function takeResetToken(): string | null {
@@ -156,6 +174,8 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         setLastSynced(res.at);
         write(LAST_SLOT, res.at);
         setStatus('idle');
+        // Keep the server's copy of this device's reminders current (time zone, times, programme days).
+        void refreshPush((row) => api.savePush(row), getProgram()).catch(() => undefined);
         if (rememberRef.current) {
           // Keep the unlocked key on this device (non-extractable) so the passphrase isn't asked for again.
           const uid = api.session.user.id;
@@ -254,6 +274,8 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         void run();
       },
       signOut: async () => {
+        // Another person signing in on this device must not get the last person's reminders.
+        await removePushQuietly(api);
         await api?.signOut();
         pass.current = null;
         keyCache.current.clear();
@@ -276,6 +298,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       },
       syncNow: () => void run(),
       deleteAccount: async () => {
+        await unsubscribeThisDevice().catch(() => null);
         await api!.deleteAccount();
         pass.current = null;
         keyCache.current.clear();
@@ -289,6 +312,12 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         setStatus('signed-out');
         void forgetKeys();
       },
+      savePush: (row) => api!.savePush(row),
+      removePush: async () => {
+        const endpoint = await unsubscribeThisDevice();
+        if (endpoint) await api!.deletePush(endpoint);
+      },
+      testPush: () => api!.testPush(),
       deleteCloudCopy: async () => {
         await api!.deleteVault();
         lastStable.current = null;

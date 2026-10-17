@@ -145,8 +145,8 @@ export class CloudApi implements VaultApi {
     await this.refreshing;
   }
 
-  private async vaultCall(query: string, init: RequestInit): Promise<Response> {
-    const r = await this.call(`/rest/v1/vaults${query}`, { ...init, auth: true, headers: { Prefer: 'return=representation', ...(init.headers as Record<string, string>) } });
+  private async restCall(path: string, init: RequestInit): Promise<Response> {
+    const r = await this.call(`/rest/v1${path}`, { ...init, auth: true, headers: { Prefer: 'return=representation', ...(init.headers as Record<string, string>) } });
     if (r.status === 401) {
       this.session = null;
       saveSession(null);
@@ -154,6 +154,8 @@ export class CloudApi implements VaultApi {
     }
     return r;
   }
+
+  private vaultCall = (query: string, init: RequestInit) => this.restCall(`/vaults${query}`, init);
 
   private row = (x: unknown): Vault | null => {
     const v = x as Partial<Vault> | undefined;
@@ -193,5 +195,35 @@ export class CloudApi implements VaultApi {
   async deleteVault(): Promise<void> {
     const r = await this.vaultCall(`?user_id=eq.${encodeURIComponent(this.session?.user.id ?? '')}`, { method: 'DELETE' });
     if (!r.ok) return this.failure(r);
+  }
+
+  /** Saves (or refreshes) this device's push address, time zone and reminder schedule. */
+  async savePush(row: { endpoint: string; p256dh: string; auth: string; tz: string; schedule: unknown[] }): Promise<void> {
+    const r = await this.restCall('/push_subscriptions?on_conflict=endpoint', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ ...row, user_id: this.session?.user.id, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) return this.failure(r);
+  }
+
+  async deletePush(endpoint: string): Promise<void> {
+    const r = await this.restCall(`/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    if (!r.ok) return this.failure(r);
+  }
+
+  /** Asks the app's own server to send a test notification to every device saved on this account. */
+  async testPush(): Promise<{ sent: number; devices: number }> {
+    await this.ensureFresh();
+    if (!this.session) throw new AuthError('Please sign in again.', 'signed_out');
+    let r: Response;
+    try {
+      r = await this.f('/api/push', { method: 'POST', headers: { Authorization: `Bearer ${this.session.access_token}` } });
+    } catch {
+      throw new NetworkError();
+    }
+    const body = (await r.json().catch(() => ({}))) as { sent?: number; devices?: number; error?: string };
+    if (!r.ok) throw new AuthError(body.error ?? `Server said ${r.status}`, String(r.status));
+    return { sent: body.sent ?? 0, devices: body.devices ?? 0 };
   }
 }

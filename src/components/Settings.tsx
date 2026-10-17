@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {CATEGORIES, PROTECTED_CATEGORIES, categoriesOf, newId} from '../money';
 import type { Tab } from '../nav';
 import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../program';
@@ -6,6 +6,8 @@ import type { DayDef, ExerciseDef } from '../program';
 import { TIER_LABEL } from '../rewards';
 import { promptInstall, useInstall } from '../install';
 import { RegionUnits } from './RegionUnits';
+import { useCloud } from '../cloud/CloudProvider';
+import { currentSubscription, markPushOn, pushSupport, pushWanted, refreshPush, showLocalTest, subscribeThisDevice } from '../push';
 import { buildIcs, downloadIcs, loadReminders, saveReminders } from '../reminders';
 import type { ReminderPlan } from '../reminders';
 import { useStore } from '../store';
@@ -27,7 +29,136 @@ const REMINDER_ROWS: { key: keyof ReminderPlan; label: string; hint: string }[] 
   { key: 'review', label: 'Weekly review', hint: 'Sundays' },
 ];
 
-function Reminders() {
+const DENIED_TEXT = 'Notifications are blocked for this site. Allow them in your browser’s site settings, then try again.';
+
+/** Real push notifications: they arrive even when the app is closed. Needs an account, so the server knows where to send. */
+function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () => void }) {
+  const cloud = useCloud();
+  const support = pushSupport();
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const signedIn = cloud.configured && !!cloud.email;
+
+  // Is this device already subscribed (from an earlier visit)? The browser is the source of truth, not our memory of it.
+  useEffect(() => {
+    let alive = true;
+    void currentSubscription().then((sub) => alive && setOn(!!sub && pushWanted() && Notification.permission === 'granted'));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Changed a time or switched a reminder? Tell the server, so what it sends matches what this screen says.
+  useEffect(() => {
+    if (!on || !signedIn) return;
+    void refreshPush((row) => cloud.savePush(row), getProgram(), plan).catch(() => setMsg('Couldn’t update your reminder times on the server. They will retry next time the app syncs.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, signedIn, plan]);
+
+  if (support === 'demo')
+    return (
+      <div className="push-box">
+        <h3>Push notifications</h3>
+        <p className="note first">Push notifications aren’t available in the demo.</p>
+      </div>
+    );
+
+  const fail = (e: unknown) => setMsg(e instanceof Error ? e.message : 'Something went wrong.');
+  const enable = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      const res = await subscribeThisDevice(plan, getProgram());
+      if (!res.ok) {
+        setMsg(res.reason === 'denied' ? DENIED_TEXT : res.reason === 'dismissed' ? 'Notifications weren’t allowed, so nothing was turned on.' : 'This device couldn’t be set up for push notifications.');
+        return;
+      }
+      await cloud.savePush(res.row);
+      markPushOn(res.row);
+      setOn(true);
+      setMsg('Turned on. Send yourself a test to check it works.');
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const disable = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      await cloud.removePush();
+      setOn(false);
+      setMsg('Turned off for this device.');
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const test = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      const r = await cloud.testPush();
+      setMsg(r.sent > 0 ? 'Sent. It should arrive within a few seconds.' : r.devices === 0 ? 'The server has no device saved for this account yet. Turn push off and on again.' : 'The server couldn’t reach your device. Turn push off and on again.');
+      if (r.sent === 0 && r.devices > 0) void showLocalTest();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="push-box">
+      <h3>Push notifications</h3>
+      {support === 'needs-install' && <p className="note first">On iPhone and iPad, notifications only work once the app is on your Home Screen. Add it first (see <b>Install on this device</b> above), then open it from there and come back here.</p>}
+      {support === 'unsupported' && <p className="note first">This browser can’t receive push notifications. The calendar file below still works everywhere.</p>}
+      {support === 'not-configured' && <p className="note first">Push notifications aren’t set up on this copy of the app yet.</p>}
+      {support === 'ok' && (
+        <>
+          <p className="note first">
+            Reminders that arrive even when the app is closed. The server is told only this device’s notification address, your time zone, and the reminder times and wording above. Nothing you have logged is ever sent.
+          </p>
+          {!signedIn ? (
+            <div className="row-action">
+              <button className="btn" onClick={onSync}>
+                Sign in to turn on
+              </button>
+              <span className="muted-s">Push needs an account so the server knows where to send.</span>
+            </div>
+          ) : on ? (
+            <div className="row-action">
+              <span className="muted-s">On for this device.</span>
+              <button className="btn" disabled={busy} onClick={() => void test()}>
+                Send a test
+              </button>
+              <button className="btn" disabled={busy} onClick={() => void disable()}>
+                Turn off
+              </button>
+            </div>
+          ) : (
+            <div className="row-action">
+              <button className="btn primary" disabled={busy || !Object.values(plan).some((p) => p.on)} onClick={() => void enable()}>
+                Turn on for this device
+              </button>
+              <span className="muted-s">Each device is turned on separately.</span>
+            </div>
+          )}
+        </>
+      )}
+      {msg && (
+        <p className="note" role="status">
+          {msg}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Reminders({ onSync }: { onSync: () => void }) {
   const [plan, setPlan] = useState<ReminderPlan>(loadReminders);
   const [made, setMade] = useState(false);
   const set = (k: keyof ReminderPlan, p: Partial<ReminderPlan[typeof k]>) => {
@@ -39,9 +170,7 @@ function Reminders() {
   return (
     <section className="panel" id="reminders">
       <h2>Reminders</h2>
-      <p className="note first">
-        Pick what you want to be reminded of, then add them to your phone’s calendar. Your calendar does the reminding, even when this app is closed, and nothing is sent anywhere.
-      </p>
+      <p className="note first">Pick what you want to be reminded of and the time for each. Then choose how: push notifications, a calendar file, or both.</p>
       <ul className="rows">
         {REMINDER_ROWS.map((r) => (
           <li key={r.key} className="row rem-row">
@@ -57,6 +186,9 @@ function Reminders() {
           </li>
         ))}
       </ul>
+      <PushNotifications plan={plan} onSync={onSync} />
+      <h3>Calendar file</h3>
+      <p className="note first">Your phone’s calendar does the reminding, even when this app is closed, and nothing is sent anywhere.</p>
       <div className="row-action">
         <button
           className="btn primary"
@@ -71,7 +203,7 @@ function Reminders() {
       </div>
       {made && (
         <p className="note" role="status">
-          Open the downloaded file. On iPhone choose Add All; on Android it opens in Google Calendar. Changing the times later? Download again, and delete the old “Life Dashboard” events first so they don’t double up.
+          Open the downloaded file. On iPhone choose Add All; on Android it opens in Google Calendar. Changing the times later? Download again, and delete the old “Life Dashboard” events first so they don’t double up. Using push notifications as well? Pick one or the other, or you will be reminded twice.
         </p>
       )}
     </section>
@@ -129,7 +261,7 @@ export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => v
       <div className="settings">
         <Install />
         <Region />
-        <Reminders />
+        <Reminders onSync={onSync} />
         <Programme />
         <Categories />
         <Rewards />
