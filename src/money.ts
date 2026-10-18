@@ -81,6 +81,12 @@ export function survivalTarget(data: AppData, today: string): SurvivalTarget {
   return { target: null, monthly: null, basis: null, daysTracked };
 }
 
+/** Savings go to the survival fund until it reaches its target, and to the investment fund after that. */
+export function activeFundOf(data: AppData, today: string): FundKey {
+  const target = survivalTarget(data, today).target;
+  return target != null && fundBalance(data, 'survival') >= target ? 'investment' : 'survival';
+}
+
 export function fundBalance(data: AppData, fund: FundKey): number {
   const saved = total(data.money.txns.filter((t) => t.kind === 'saving' && (t.fund ?? 'survival') === fund));
   return saved + (fund === 'survival' ? data.money.survivalOpening : 0);
