@@ -38,7 +38,7 @@ ok(calls.length===2,'chat call made');
 // untick money, ask again
 await page.locator('.shares label',{hasText:'Money'}).locator('input').uncheck();
 await page.fill('input[aria-label="Your question"]','Anything?'); await page.getByRole('button',{name:'Ask',exact:true}).click();
-await page.waitForFunction(()=>document.querySelectorAll('.chat li.assistant').length>=2);
+await page.waitForFunction(()=>document.querySelectorAll('.chat li.assistant:not(.pending)').length>=2); // finished replies only: the pending placeholder shows before the request is recorded
 ok(!calls[2].b.system.includes('"money"')&&calls[2].b.messages.length===3,'money excluded, history sent');
 // error path
 mode='401'; await page.fill('input[aria-label="Your question"]','again'); await page.getByRole('button',{name:'Ask',exact:true}).click();

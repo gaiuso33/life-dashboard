@@ -110,7 +110,7 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - Month tab: Monday-first calendar with the push/pull/legs days, four-plate dots for past days, reward-block end and goal deadline markers, and month totals (sessions, strong days, bills and income still due).
 - Plans: add a bill, income, task or event to any day, optionally repeating monthly (a 31st repeats on the last day of shorter months). Tick items off per occurrence; deleting a repeating item removes it from every month.
 - Items due today or in the next two days appear as nudges. The advisor sees only counts and naira totals for the next 14 days, never titles.
-- Not yet connected: ticking a bill does not create a Money entry; income and bill items are reminders only.
+- Ticking a bill or an income item with an amount offers to record it in Money (section 28). Tasks, events and items with no amount just tick.
 
 ## 10. Phone and laptop sync (built)
 - Storage stays on each device. "Sync and backup" (top right on every screen, and in the sidebar on laptop) downloads a JSON copy, or opens the phone share sheet, and imports a copy from another device with a preview.
@@ -165,8 +165,8 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 179 unit tests (incl. the statement importer, reminders, push scheduling, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 69 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, new versions reaching an installed app, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 200 unit tests (incl. the statement importer, reminders, push scheduling, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 75 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, new versions reaching an installed app, bills and income recorded in Money, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -274,3 +274,19 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 **Checked by tests.** `e2e/updates.spec.ts` runs with service workers on: the build stamp is present, the first install shows no banner, a new deploy shows the banner and "Update now" loads it, the newest page is used on the very first reload, and the saved copy still opens offline. `src/__tests__/updates.test.ts` covers the once-a-minute limit.
 
 **Not verified.** How a particular phone treats a put-away app (some keep it frozen for days). The banner appears as soon as the app is brought back to the front and the browser has had a moment to check.
+
+## 28. Bills and income feed Money (built)
+
+**What it does.** On the Month calendar, ticking a bill or an income item that has an amount opens a small form under it, already filled in: the amount, the category (the one last used for the same name, otherwise Other), and the date (the day it was due, or today if that day is still ahead, because nothing can be recorded in the future). **Record and tick** adds the Money entry and ticks the item in one step. **Just tick** ticks it without recording anything, for people who log elsewhere. Cancel or Escape leaves it unticked. Tasks, events and items with no amount tick straight away as before.
+- A bill becomes an expense. Income becomes income, and a checkbox offers to move the usual share (the savings percentage in Money) into the survival fund, or the investment fund once the survival target is reached. That saving is what the reward rule "a savings transfer was made" looks for.
+- Unticking an item that was recorded asks **Also remove it from Money?** with three choices: untick and remove, untick and keep the entry, or cancel. Entries logged by hand are never touched.
+- Everything downstream uses the entry like any other: monthly totals, spending charts, the survival fund and its ETA, and the reward gate.
+
+**How it stays correct.** The entry's id is made from the planned item and the day it was due (`plan:<item>:<date>`, plus `:save` for the savings split). That means no extra stored data, a tick that arrives twice adds nothing, each month of a repeating item has its own entry, and two devices that both tick the same bill end up with one entry after a merge, not two. An entry that was removed stays removed on every device (its id goes in the list of deleted things), so ticking again afterwards uses the next free id (`:2`, `:3`) rather than being blocked by the removed one.
+
+**Checked by tests.** `src/__tests__/planpay.test.ts` covers the ids, what a tick creates, ticking and unticking, never doubling, removal staying removed through a merge, hand-logged entries being safe, saved copies loading, and the effect on month totals, the survival fund and the reward rule. `e2e/bills.spec.ts` covers the whole flow on a desktop and a phone, including accessibility.
+
+**Not done.**
+- A bill ticked before it is due is dated today but keeps the due day's id.
+- The Today screen only reminds about bills that are coming up; it does not tick them.
+- Editing the amount or date of a recorded bill is done in Money, and the Month calendar does not follow it.

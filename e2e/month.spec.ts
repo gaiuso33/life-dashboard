@@ -21,7 +21,7 @@ await page.fill('input[placeholder^="Rent"]','Pay rent'); await page.getByRole('
 await page.fill('input[placeholder="3500"]','50,000'); await page.getByText('Repeat every month').click();
 await page.getByRole('button',{name:'Add',exact:true}).click();
 ok(await page.locator('.plan-list li',{hasText:'Pay rent'}).isVisible(),'added');
-await page.locator('.plan-list li',{hasText:'Pay rent'}).locator('input').check();
+await page.locator('.plan-list li',{hasText:'Pay rent'}).locator('input').click(); await page.getByRole('button',{name:'Just tick'}).click(); // a bill with an amount asks whether to record it in Money first (see bills.spec.ts)
 await page.getByRole('button',{name:'Next month'}).click();
 ok(await page.locator('h1',{hasText:'November 2026'}).isVisible(),'next month');
 await page.locator('.cal-d[aria-label^="Thursday, 12"]').click();

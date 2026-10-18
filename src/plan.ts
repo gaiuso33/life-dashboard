@@ -1,4 +1,5 @@
-import type { AppData, PlanItem, PlanKind } from './types';
+import { suggestedSave } from './money';
+import type { AppData, FundKey, PlanItem, PlanKind, Txn } from './types';
 import { addDays, fromKey, mondayOf, pad } from './utils';
 
 export const KIND_LABEL: Record<PlanKind, string> = { bill: 'Bill', income: 'Income', task: 'Task', event: 'Event' };
@@ -55,3 +56,51 @@ export function monthCells(ym: string): string[] {
 export function dueSoon(data: AppData, today: string, days = 2): Occurrence[] {
   return plansBetween(data, today, addDays(today, days)).filter((o) => !o.done);
 }
+
+// ---- Ticking a bill or income item records it in Money. ----
+// The Money entry gets an id made from the planned item and the day it was due, so the link needs no extra stored data and
+// two devices that both tick the same bill agree on the same entry (a merge keeps one, not two).
+
+export const linkBase = (itemId: string, date: string) => `plan:${itemId}:${date}`;
+
+/** True for the entry made by ticking one occurrence, its income-split saving (`:save`), and one made by ticking it again after an untick (`:2`). */
+export function isLinkedTxnId(id: string, itemId: string, date: string): boolean {
+  const base = linkBase(itemId, date);
+  return id.startsWith(base) && /^(:\d+)?(:save)?$/.test(id.slice(base.length));
+}
+
+export const linkedTxns = (data: AppData, itemId: string, date: string): Txn[] => data.money.txns.filter((t) => isLinkedTxnId(t.id, itemId, date));
+
+/** The id for a new entry. An entry that was removed stays removed everywhere (its id is in `gone`), so ticking again needs the next free id. */
+export function freshLinkBase(data: AppData, itemId: string, date: string): string {
+  const dead = new Set(data.gone);
+  const base = linkBase(itemId, date);
+  for (let n = 1; n < 1000; n++) {
+    const id = n === 1 ? base : `${base}:${n}`;
+    if (!dead.has(id)) return id;
+  }
+  return `${base}:${Date.now().toString(36)}`;
+}
+
+export interface PayChoice {
+  amount: number;
+  category: string;
+  date: string;
+  /** Income only: also move the usual share into savings. */
+  split: boolean;
+  fund: FundKey;
+}
+
+/** The Money entries to create when an occurrence is ticked. Bills are expenses; income is income, plus its savings split if asked for. */
+export function payTxns(item: PlanItem, base: string, c: PayChoice, savePct: number): Txn[] {
+  if (item.kind === 'income') {
+    const out: Txn[] = [{ id: base, date: c.date, kind: 'income', amount: c.amount, note: item.title }];
+    const save = suggestedSave(c.amount, savePct);
+    if (c.split && save > 0) out.push({ id: `${base}:save`, date: c.date, kind: 'saving', amount: save, fund: c.fund, note: 'From income split' });
+    return out;
+  }
+  return [{ id: base, date: c.date, kind: 'expense', amount: c.amount, category: c.category, note: item.title }];
+}
+
+/** Only bills and income with an amount can become a Money entry. */
+export const recordable = (item: PlanItem): boolean => (item.kind === 'bill' || item.kind === 'income') && item.amount > 0;

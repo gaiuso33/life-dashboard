@@ -6,6 +6,7 @@ import { resolvePrefs, setActivePrefs } from './units';
 import type { Prefs } from './units';
 import { stampChanges } from './scalars';
 import { categoriesOf } from './money';
+import { linkedTxns } from './plan';
 import { LocalRepository } from './repository';
 import type { LoadResult, Repository } from './repository';
 import { mergeData } from './merge';
@@ -44,7 +45,8 @@ type Action =
   | { t: 'item-edit'; item: RewardItem }
   | { t: 'plan-add'; item: PlanItem }
   | { t: 'plan-del'; id: string }
-  | { t: 'plan-toggle'; id: string; date: string }
+  | { t: 'plan-toggle'; id: string; date: string; /** When unticking: also remove the Money entries the tick made. */ removeEntries?: boolean }
+  | { t: 'plan-pay'; id: string; date: string; txns: Txn[] }
   | { t: 'setup'; answers: SetupAnswers }
   | { t: 'fresh' };
 
@@ -61,7 +63,7 @@ function withSession(data: AppData, date: string, day: DayKey, fn: (s: Session) 
 const withGone = (s: AppData, ...ids: string[]): AppData => ({ ...s, gone: [...new Set([...s.gone, ...ids])] });
 
 /** Every change by the user stamps the data, so merging two devices knows which one is newer. Automatic actions do not. */
-function reducer(state: AppData, a: Action): AppData {
+export function reducer(state: AppData, a: Action): AppData {
   const next = apply(state, a);
   if (a.t === 'load' || a.t === 'badges-earn' || next === state) return next;
   const now = new Date().toISOString();
@@ -186,8 +188,26 @@ function apply(state: AppData, a: Action): AppData {
       return { ...state, plans: [...state.plans, a.item] };
     case 'plan-del':
       return { ...withGone(state, a.id), plans: state.plans.filter((p) => p.id !== a.id) };
-    case 'plan-toggle':
-      return { ...state, plans: state.plans.map((p) => (p.id !== a.id ? p : { ...p, doneOn: p.doneOn.includes(a.date) ? p.doneOn.filter((d) => d !== a.date) : [...p.doneOn, a.date] })) };
+    case 'plan-toggle': {
+      const was = state.plans.find((p) => p.id === a.id)?.doneOn.includes(a.date) ?? false;
+      let next: AppData = { ...state, plans: state.plans.map((p) => (p.id !== a.id ? p : { ...p, doneOn: was ? p.doneOn.filter((d) => d !== a.date) : [...p.doneOn, a.date] })) };
+      if (was && a.removeEntries) {
+        const ids = linkedTxns(state, a.id, a.date).map((t) => t.id);
+        if (ids.length) next = { ...withGone(next, ...ids), money: { ...next.money, txns: next.money.txns.filter((t) => !ids.includes(t.id)) } };
+      }
+      return next;
+    }
+    case 'plan-pay': {
+      // Ticks the occurrence and records it in one step. An entry that already exists, or was deleted, is not added again.
+      const have = new Set(state.money.txns.map((t) => t.id));
+      const dead = new Set(state.gone);
+      const fresh = a.txns.filter((t) => !have.has(t.id) && !dead.has(t.id));
+      return {
+        ...state,
+        plans: state.plans.map((p) => (p.id !== a.id || p.doneOn.includes(a.date) ? p : { ...p, doneOn: [...p.doneOn, a.date] })),
+        money: fresh.length ? { ...state.money, txns: [...state.money.txns, ...fresh] } : state.money,
+      };
+    }
     case 'setup':
       return buildSetup(state, a.answers);
     case 'fresh':

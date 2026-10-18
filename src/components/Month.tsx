@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { ITEMS, dayScore, dayStatus, plannedFor } from '../derive';
 import { newId } from '../money';
-import { KIND_LABEL, monthCells, monthEnd, monthKey, monthStart, monthTitle, plansBetween, plansOn, shiftMonth } from '../plan';
+import { KIND_LABEL, linkedTxns, monthCells, monthEnd, monthKey, monthStart, monthTitle, plansBetween, plansOn, recordable, shiftMonth } from '../plan';
+import { PayForm, UntickForm } from './PlanSettle';
 import { dayDef } from '../program';
 import { periodStart } from '../rewards';
 import { useStore } from '../store';
@@ -22,6 +23,8 @@ export function Month() {
   const [kind, setKind] = useState<PlanKind>('task');
   const [amount, setAmount] = useState('');
   const [monthly, setMonthly] = useState(false);
+  // The tick that is waiting for an answer: record it in Money, or take the Money entry back.
+  const [pending, setPending] = useState<{ id: string; date: string; mode: 'pay' | 'untick' } | null>(null);
 
   const cells = useMemo(() => monthCells(ym), [ym]);
   const first = monthStart(ym);
@@ -71,6 +74,7 @@ export function Month() {
   };
 
   const pick = (d: string) => {
+    setPending(null);
     setSel(d);
     if (!inMonth(d)) setYm(monthKey(d));
   };
@@ -178,29 +182,43 @@ export function Month() {
             <p className="note first">Nothing planned for this day.</p>
           ) : (
             <ul className="plan-list">
-              {selPlans.map((o) => (
-                <li key={o.item.id} className={o.done ? 'is-done' : ''}>
-                  <label>
-                    <input type="checkbox" checked={o.done} onChange={() => dispatch({ t: 'plan-toggle', id: o.item.id, date: o.date })} />
-                    <span>
-                      <b>{o.item.title}</b>
-                      <small>
-                        {KIND_LABEL[o.item.kind]}
-                        {o.item.amount > 0 ? `, ${fmtMoney(o.item.amount)}` : ''}
-                        {o.item.repeat === 'monthly' ? ', every month' : ''}
-                      </small>
-                    </span>
-                  </label>
-                  <button
-                    className="btn ghost"
-                    onClick={() => {
-                      if (o.item.repeat === 'none' || window.confirm('Delete this item from every month?')) dispatch({ t: 'plan-del', id: o.item.id });
-                    }}
-                  >
-                    Delete
-                  </button>
-                </li>
-              ))}
+              {selPlans.map((o) => {
+                const recorded = linkedTxns(data, o.item.id, o.date).length > 0;
+                const open = pending && pending.id === o.item.id && pending.date === o.date ? pending.mode : null;
+                const tick = () => {
+                  if (o.done) {
+                    if (recorded) setPending({ id: o.item.id, date: o.date, mode: 'untick' });
+                    else dispatch({ t: 'plan-toggle', id: o.item.id, date: o.date });
+                  } else if (recordable(o.item)) setPending({ id: o.item.id, date: o.date, mode: 'pay' });
+                  else dispatch({ t: 'plan-toggle', id: o.item.id, date: o.date });
+                };
+                return (
+                  <li key={o.item.id} className={o.done ? 'is-done' : ''}>
+                    <label>
+                      <input type="checkbox" checked={o.done} onChange={tick} />
+                      <span>
+                        <b>{o.item.title}</b>
+                        <small>
+                          {KIND_LABEL[o.item.kind]}
+                          {o.item.amount > 0 ? `, ${fmtMoney(o.item.amount)}` : ''}
+                          {o.item.repeat === 'monthly' ? ', every month' : ''}
+                          {recorded ? ', recorded in Money' : ''}
+                        </small>
+                      </span>
+                    </label>
+                    <button
+                      className="btn ghost"
+                      onClick={() => {
+                        if (o.item.repeat === 'none' || window.confirm('Delete this item from every month?')) dispatch({ t: 'plan-del', id: o.item.id });
+                      }}
+                    >
+                      Delete
+                    </button>
+                    {open === 'pay' && <PayForm occ={o} onClose={() => setPending(null)} />}
+                    {open === 'untick' && <UntickForm occ={o} onClose={() => setPending(null)} />}
+                  </li>
+                );
+              })}
             </ul>
           )}
 

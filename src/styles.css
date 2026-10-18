@@ -428,12 +428,14 @@ select:hover { border-color: var(--steel-3); }
 .cal-d .pl-dot { display: none; }
 .cal-d .flag { font-size: 10px; color: var(--plate-yellow); text-transform: uppercase; letter-spacing: .04em; }
 .plan-list { display: grid; gap: 6px; }
-.plan-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: var(--steel-2); border: 1px solid var(--steel-3); border-radius: 8px; }
+.plan-list li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: var(--steel-2); border: 1px solid var(--steel-3); border-radius: 8px; }
 .plan-list label { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .plan-list label span { display: grid; min-width: 0; }
 .plan-list small { color: var(--muted); font-size: 13px; }
 .plan-list input { width: 20px; height: 20px; accent-color: var(--plate-green); flex: none; }
 .plan-list li.is-done b { text-decoration: line-through; color: var(--muted); }
+.plan-confirm { flex: 1 1 100%; display: grid; gap: 10px; padding: 12px; margin-top: 4px; background: var(--steel-1); border: 1px solid var(--plate-green); border-radius: 8px; }
+.plan-confirm .field { width: 100%; }
 .plan-form { display: grid; gap: 10px; justify-items: start; }
 .plan-form .field { width: 100%; }
 .plan-form .segment { width: 100%; }
