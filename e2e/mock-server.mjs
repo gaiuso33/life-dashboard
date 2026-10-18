@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 const PORT = Number(process.env.MOCK_PORT ?? 4600);
 const ANON = 'test-anon';
-const fresh = () => ({ users: new Map(), vaults: new Map(), tokens: new Map(), log: [], sent: [], opts: { confirmEmail: false, ttlMs: 3600e3 } });
+const fresh = () => ({ users: new Map(), vaults: new Map(), push: new Map(), tokens: new Map(), log: [], sent: [], opts: { confirmEmail: false, ttlMs: 3600e3 } });
 let st = fresh();
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'apikey,authorization,content-type,prefer,x-client-info', 'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS' };
 
@@ -41,6 +41,13 @@ http
         log: st.log,
         sent: st.sent,
       });
+    }
+    // Test hook: save a push device row for the account with this email, as if its phone had turned push on.
+    if (url.pathname === '/__admin/push' && q.method === 'POST') {
+      const u = [...st.users.values()].find((x) => x.email === body.email);
+      if (!u) return send(404, { error: 'no such user' });
+      st.push.set(body.row.endpoint, { last_sent: {}, updated_at: new Date().toISOString(), ...body.row, user_id: u.id });
+      return send(200, {});
     }
     if (url.pathname === '/__admin/reset') {
       st = fresh();
@@ -93,6 +100,22 @@ http
       st.vaults.delete(uid);
       for (const [k, t] of st.tokens) if (t.uid === uid) st.tokens.delete(k);
       return send(204);
+    }
+    if (url.pathname === '/rest/v1/push_subscriptions') {
+      const uid = who();
+      if (!uid) return send(401, { message: 'JWT expired', code: 'PGRST301' });
+      const mine = () => [...st.push.values()].filter((p) => p.user_id === uid);
+      if (q.method === 'GET') return send(200, mine().map(({ user_id, p256dh, auth, ...rest }) => rest));
+      if (q.method === 'POST') {
+        if (body.user_id !== uid) return send(403, { message: 'row-level security' });
+        st.push.set(body.endpoint, { last_sent: {}, ...st.push.get(body.endpoint), ...body });
+        return send(201);
+      }
+      if (q.method === 'DELETE') {
+        const ep = decodeURIComponent(/endpoint=eq\.([^&]+)/.exec(url.search)?.[1] ?? '');
+        if (st.push.get(ep)?.user_id === uid) st.push.delete(ep);
+        return send(204);
+      }
     }
     if (url.pathname === '/rest/v1/vaults') {
       const uid = who();
