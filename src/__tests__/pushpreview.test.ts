@@ -155,3 +155,16 @@ describe('describing the devices on an account', () => {
     expect(v[0].isThis).toBe(false);
   });
 });
+
+describe('a device the server cannot reach', () => {
+  it('shows when it first failed, and nothing otherwise', async () => {
+    const { describeDevices } = await import('../pushPreview');
+    const { DEFAULT_REMINDERS } = await import('../reminders');
+    const { DEFAULT_PROGRAM } = await import('../program');
+    const now = new Date('2026-10-12T20:00:00Z');
+    const mk = (last_sent: unknown) => describeDevices([{ endpoint: 'https://fcm.googleapis.com/x', tz: 'Africa/Lagos', schedule: [], last_sent }], null, DEFAULT_REMINDERS, DEFAULT_PROGRAM, now, 'Africa/Lagos')[0];
+    expect(mk({ _fail: '2026-10-12T17:00:00Z' }).unreachable).toBe('3 h ago');
+    expect(mk({}).unreachable).toBeNull();
+    expect(mk({ _fail: 'junk' }).unreachable).toBeNull();
+  });
+});

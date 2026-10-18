@@ -202,8 +202,11 @@ test.describe('push notifications in Settings', () => {
       const seed = (endpoint: string, tz: string, extra = {}) =>
         fetch(`${MOCK}/__admin/push`, { method: 'POST', body: JSON.stringify({ email: EMAIL, row: { endpoint, tz, p256dh: 'k', auth: 'a', schedule, ...extra } }) });
       await seed('https://fcm.googleapis.com/fcm/send/' + 'a'.repeat(30), 'Africa/Lagos', { last_sent: { checkin: '2026-10-09' } });
-      await seed('https://web.push.apple.com/' + 'b'.repeat(30), 'Europe/London');
+      await seed('https://web.push.apple.com/' + 'b'.repeat(30), 'Europe/London', { last_sent: { _fail: '2026-10-09T06:00:00.000Z' } });
       await check.click();
+      // The second device could not be reached by the server's last attempt, and the page says so.
+      await expect(view.locator('.server-dev').filter({ hasText: 'could not reach this device' })).toHaveCount(1);
+      await expect(view.locator('.server-dev').filter({ hasText: 'could not reach this device' })).toContainText('first failed 3 h ago');
       await expect(view).toContainText('None of these is the device you are using');
       await expect(view.locator('.server-dev')).toHaveCount(2);
       const first = view.locator('.server-dev').first();
