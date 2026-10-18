@@ -633,3 +633,8 @@ textarea:focus-visible { outline-offset: 0; border-color: var(--chalk); }
 .welcome-card > * { grid-column: 1; }
 .region { display: grid; gap: 6px; min-width: 0; }
 .region .field select { min-width: 0; width: 100%; text-overflow: ellipsis; }
+
+/* What the server holds for each device (Settings -> Reminders) */
+.server-view { display: grid; gap: 12px; margin-top: 12px; padding: 12px; background: var(--steel-1); border: 1px solid var(--steel-3); border-radius: 8px; }
+.server-dev { display: grid; gap: 6px; min-width: 0; }
+.server-dev .row { flex-wrap: wrap; gap: 4px 12px; }

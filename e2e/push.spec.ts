@@ -41,15 +41,42 @@ test.describe('push notifications in Settings', () => {
     await ctx.close();
   });
 
+  test('each reminder row says when it will next arrive, and follows the times and the programme', async ({ browser }) => {
+    // The clock is fixed at Friday 9 Oct 2026, 10:00 in Lagos. The default programme trains on Monday, Wednesday and Friday.
+    const ctx = await newContext(browser, { viewport: DESKTOP });
+    const page = await ctx.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(APP);
+    await setUpEmptyDashboard(page);
+    await goToReminders(page);
+    const rowOf = (label: string) => page.locator('#reminders .rem-row', { hasText: label });
+
+    await expect(rowOf('Daily check-in')).toContainText('Next: today 21:00');
+    await expect(rowOf('Training day')).toContainText('Next: today 17:30');
+    await expect(rowOf('Weekly review')).toContainText('Next: Sunday 19:00');
+    await expect(rowOf('Log spending')).not.toContainText('Next:'); // switched off by default
+
+    // A time that has already passed today moves to the next gym day, which is what someone testing on a rest day needs to see.
+    await page.getByLabel('Training day time').fill('09:00');
+    await expect(rowOf('Training day')).toContainText('Next: Monday 09:00');
+    await page.getByLabel('Daily check-in time').fill('09:00');
+    await expect(rowOf('Daily check-in')).toContainText('Next: tomorrow (Saturday) 09:00');
+
+    await page.getByRole('checkbox', { name: /Log spending/ }).check();
+    await expect(rowOf('Log spending')).toContainText('Next: today 20:00');
+    await page.getByRole('checkbox', { name: /Training day/ }).uncheck();
+    await expect(rowOf('Training day')).not.toContainText('Next:');
+    await expectNoA11yViolations(page, 'reminders with next times');
+    expect(errors).toEqual([]);
+    await ctx.close();
+  });
+
   test.describe('with push set up and an account', () => {
     test.describe.configure({ mode: 'serial' });
-    const EMAIL = 'push@example.com';
+    const EMAIL = `push-${Date.now()}@example.com`; // unique per run: the mock server is shared with other specs
     const PASSWORD = 'correct-password';
     const PASSPHRASE = 'purple-elephant-42';
-
-    test.beforeAll(async () => {
-      await fetch(`${MOCK}/__admin/reset`, { method: 'POST', body: '{}' });
-    });
 
     test('signed out: asks the person to sign in, and the button opens the sign-in dialog', async ({ browser }) => {
       const ctx = await newContext(browser, { viewport: PHONE });
@@ -139,6 +166,60 @@ test.describe('push notifications in Settings', () => {
       await turnOn.click();
       await expect(page.locator('.push-box').getByRole('status')).toContainText('couldn’t be set up', { timeout: 20_000 });
       await expect(turnOn).toBeEnabled();
+      await ctx.close();
+    });
+
+    test('"Check what the server has" lists every device on the account with its times, days and next send', async ({ browser }) => {
+      test.setTimeout(60_000);
+      const ctx = await newContext(browser, { viewport: PHONE });
+      const page = await ctx.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('dialog', (d) => void d.accept());
+      await page.goto(CLOUD_APP);
+      await page.getByRole('button', { name: 'Sign in to my account' }).click();
+      await page.getByLabel('Email').fill(EMAIL);
+      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+      await page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
+      await page.getByLabel('Passphrase', { exact: true }).fill(PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock' }).click();
+      await page.getByText('Today’s plates').waitFor({ timeout: 20_000 });
+      await goToReminders(page);
+
+      const box = page.locator('.push-box');
+      const check = box.getByRole('button', { name: 'Check what the server has' });
+      const view = box.getByRole('region', { name: 'What the server has' });
+
+      // Nothing saved yet.
+      await check.click();
+      await expect(view).toContainText('no devices saved for this account');
+
+      // Two devices appear on the account, as if turned on from a phone and a laptop.
+      const schedule = [
+        { id: 'checkin', time: '21:00', days: [], title: 'Time to check in', body: 'Tick your plates and rate your energy for today.' },
+        { id: 'training', time: '17:30', days: [1, 3, 5], title: 'Training day', body: 'Open your programme and log your sets.' },
+      ];
+      const seed = (endpoint: string, tz: string, extra = {}) =>
+        fetch(`${MOCK}/__admin/push`, { method: 'POST', body: JSON.stringify({ email: EMAIL, row: { endpoint, tz, p256dh: 'k', auth: 'a', schedule, ...extra } }) });
+      await seed('https://fcm.googleapis.com/fcm/send/' + 'a'.repeat(30), 'Africa/Lagos', { last_sent: { checkin: '2026-10-09' } });
+      await seed('https://web.push.apple.com/' + 'b'.repeat(30), 'Europe/London');
+      await check.click();
+      await expect(view).toContainText('None of these is the device you are using');
+      await expect(view.locator('.server-dev')).toHaveCount(2);
+      const first = view.locator('.server-dev').first();
+      await expect(first).toContainText('Another device');
+      await expect(first).toContainText('Chrome or Android');
+      await expect(first).toContainText('time zone Africa/Lagos');
+      await expect(first.locator('.row', { hasText: 'Training day' })).toContainText('17:30 · Mon, Wed, Fri');
+      await expect(first.locator('.row', { hasText: 'Training day' })).toContainText('Next: today 17:30');
+      // The check-in already went out today, so its next time is tomorrow, and the page says when it last went.
+      await expect(first.locator('.row', { hasText: 'Daily check-in' })).toContainText('Next: tomorrow (Saturday) 21:00 · last sent 2026-10-09');
+      await expect(view.locator('.server-dev').nth(1)).toContainText('Apple (Safari or iPhone)');
+      await expect(view.locator('.server-dev').nth(1)).toContainText('time zone Europe/London');
+
+      await expectNoA11yViolations(page, 'what the server has');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scroll on a phone').toBe(true);
+      expect(errors).toEqual([]);
       await ctx.close();
     });
   });

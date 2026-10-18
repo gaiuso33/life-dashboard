@@ -10,6 +10,7 @@ import { forgetKeys, recallKey, rememberKey } from './keystore';
 import { getProgram } from '../program';
 import { currentSubscription, refreshPush, unsubscribeThisDevice } from '../push';
 import type { PushRow } from '../push';
+import type { ServerRow } from '../pushPreview';
 
 export type CloudStatus = 'off' | 'signed-out' | 'locked' | 'idle' | 'syncing' | 'offline' | 'error';
 
@@ -40,6 +41,8 @@ interface CloudCtx {
   savePush: (row: PushRow) => Promise<void>;
   removePush: () => Promise<void>;
   testPush: () => Promise<{ sent: number; devices: number }>;
+  /** What the server holds for every device on this account. */
+  listPush: () => Promise<ServerRow[]>;
 }
 
 const Ctx = createContext<CloudCtx | null>(null);
@@ -318,6 +321,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         if (endpoint) await api!.deletePush(endpoint);
       },
       testPush: () => api!.testPush(),
+      listPush: () => api!.listPush(),
       deleteCloudCopy: async () => {
         await api!.deleteVault();
         lastStable.current = null;

@@ -7,7 +7,9 @@ import { TIER_LABEL } from '../rewards';
 import { promptInstall, useInstall } from '../install';
 import { RegionUnits } from './RegionUnits';
 import { useCloud } from '../cloud/CloudProvider';
-import { currentSubscription, markPushOn, pushSupport, pushWanted, refreshPush, showLocalTest, subscribeThisDevice } from '../push';
+import { currentSubscription, deviceZone, markPushOn, pushSupport, pushWanted, refreshPush, rowFrom, showLocalTest, subscribeThisDevice } from '../push';
+import { describeDevices, nextForRow } from '../pushPreview';
+import type { DeviceView } from '../pushPreview';
 import { buildIcs, downloadIcs, loadReminders, saveReminders } from '../reminders';
 import type { ReminderPlan } from '../reminders';
 import { useStore } from '../store';
@@ -38,6 +40,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [view, setView] = useState<DeviceView[] | null>(null);
   const signedIn = cloud.configured && !!cloud.email;
 
   // Is this device already subscribed (from an earlier visit)? The browser is the source of truth, not our memory of it.
@@ -97,6 +100,36 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
       setBusy(false);
     }
   };
+  // What the server really holds for each device on this account, set beside what this screen says.
+  const check = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      const rows = await cloud.listPush();
+      const sub = await currentSubscription();
+      setView(describeDevices(rows, sub?.endpoint ?? null, plan, getProgram(), new Date(), deviceZone()));
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resync = async () => {
+    setBusy(true);
+    try {
+      const sub = await currentSubscription();
+      if (!sub) throw new Error('This device has no notification address. Turn push off and on again.');
+      const row = rowFrom(sub, plan, getProgram());
+      await cloud.savePush(row);
+      markPushOn(row);
+      setBusy(false);
+      await check();
+      setMsg('The server now has these times.');
+    } catch (e) {
+      setBusy(false);
+      fail(e);
+    }
+  };
   const test = async () => {
     setBusy(true);
     setMsg('');
@@ -147,6 +180,55 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
               <span className="muted-s">Each device is turned on separately.</span>
             </div>
           )}
+          {signedIn && (
+            <div className="row-action">
+              <button className="btn" disabled={busy} onClick={() => void check()}>
+                Check what the server has
+              </button>
+              <span className="muted-s">Shows the times and days each of your devices will really be sent.</span>
+            </div>
+          )}
+          {view && (
+            <div className="server-view" role="region" aria-label="What the server has">
+              {view.length === 0 && <p className="note first">The server has no devices saved for this account yet. Turn push on for a device first.</p>}
+              {view.length > 0 && !view.some((d) => d.isThis) && <p className="note first">None of these is the device you are using. Turn push on here to add it.</p>}
+              {view.map((d) => (
+                <div key={d.endpoint} className="server-dev">
+                  <p>
+                    <b>{d.isThis ? 'This device' : 'Another device'}</b>{' '}
+                    <small className="muted-s">
+                      {d.service} · time zone {d.tz} · updated {d.updatedAgo}
+                    </small>
+                  </p>
+                  {d.items.length === 0 ? (
+                    <p className="note">No reminders are switched on for this device.</p>
+                  ) : (
+                    <ul className="rows">
+                      {d.items.map((i) => (
+                        <li key={i.id} className="row">
+                          <span>
+                            <b>{i.name}</b> <small className="muted-s">{i.time} · {i.daysText}</small>
+                          </span>
+                          <small className="muted-s">
+                            Next: {i.next}
+                            {i.lastSent ? ` · last sent ${i.lastSent}` : ''}
+                          </small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {d.isThis && !d.inSync && (
+                    <div className="row-action">
+                      <span className="muted-s">The server has different times from this screen.</span>
+                      <button className="btn" disabled={busy} onClick={() => void resync()}>
+                        Update the server now
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
       {msg && (
@@ -160,6 +242,8 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
 
 function Reminders({ onSync }: { onSync: () => void }) {
   const [plan, setPlan] = useState<ReminderPlan>(loadReminders);
+  const program = getProgram();
+  const now = new Date();
   const [made, setMade] = useState(false);
   const set = (k: keyof ReminderPlan, p: Partial<ReminderPlan[typeof k]>) => {
     const next = { ...plan, [k]: { ...plan[k], ...p } };
@@ -177,7 +261,14 @@ function Reminders({ onSync }: { onSync: () => void }) {
             <label className="check">
               <input type="checkbox" checked={plan[r.key].on} onChange={(e) => set(r.key, { on: e.target.checked })} />
               <span>
-                <b>{r.label}</b> <small className="muted-s">{r.hint}</small>
+                <b>{r.label}</b>{' '}
+                <small className="muted-s">
+                  {r.hint}
+                  {(() => {
+                    const next = nextForRow(r.key, plan, program, deviceZone(), now);
+                    return next ? ` · Next: ${next}` : '';
+                  })()}
+                </small>
               </span>
             </label>
             <div className="row-action">

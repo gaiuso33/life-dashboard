@@ -1,4 +1,5 @@
 import { isDemo } from '../demo';
+import type { ServerRow } from '../pushPreview';
 import type { Vault, VaultApi } from './engine';
 
 export interface CloudSession {
@@ -205,6 +206,14 @@ export class CloudApi implements VaultApi {
       body: JSON.stringify({ ...row, user_id: this.session?.user.id, updated_at: new Date().toISOString() }),
     });
     if (!r.ok) return this.failure(r);
+  }
+
+  /** Every device saved on this account, as the server holds it (row-level rules mean only the person's own rows come back). */
+  async listPush(): Promise<ServerRow[]> {
+    const r = await this.restCall('/push_subscriptions?select=endpoint,tz,schedule,last_sent,updated_at&order=updated_at.desc&limit=50', { method: 'GET' });
+    if (!r.ok) return this.failure(r);
+    const rows = (await r.json().catch(() => [])) as unknown;
+    return Array.isArray(rows) ? (rows as ServerRow[]).filter((x) => x && typeof x.endpoint === 'string' && typeof x.tz === 'string') : [];
   }
 
   async deletePush(endpoint: string): Promise<void> {
