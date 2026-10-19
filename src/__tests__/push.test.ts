@@ -122,10 +122,11 @@ describe('running a tick', () => {
     expect(calls).toHaveLength(0);
     expect(res).toEqual({ updates: [], gone: [], sent: 0, retry: 0 });
   });
-  it('leaves a failed send unmarked so the next minute tries again', async () => {
+  it('leaves a failed reminder unmarked so the next minute tries again (only the device is flagged)', async () => {
     const { send } = sender('retry');
     const res = await runTick([row()], NOW, send);
-    expect(res).toMatchObject({ sent: 0, retry: 1, updates: [] });
+    expect(res).toMatchObject({ sent: 0, retry: 1 });
+    expect(Object.keys(res.updates[0].last_sent)).toEqual(['_fail']);
   });
   it('treats a thrown error like a failed send and carries on with other devices', async () => {
     const bad = row({ endpoint: 'https://push.example/' + 'b'.repeat(30) });
@@ -136,7 +137,8 @@ describe('running a tick', () => {
     };
     const res = await runTick([bad, good], NOW, send);
     expect(res).toMatchObject({ sent: 1, retry: 1 });
-    expect(res.updates.map((u) => u.endpoint)).toEqual([good.endpoint]);
+    expect(res.updates.map((u) => u.endpoint).sort()).toEqual([bad.endpoint, good.endpoint].sort());
+    expect(res.updates.find((u) => u.endpoint === good.endpoint)!.last_sent._fail).toBeUndefined();
   });
   it('reports a dead push address for removal and stops sending to it', async () => {
     const two = row({ schedule: [item(), item({ id: 'money' })] });
