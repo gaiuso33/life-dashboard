@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const sendNotification = vi.fn();
 vi.mock('web-push', () => ({ default: { setVapidDetails: vi.fn(), sendNotification: (...a: unknown[]) => sendNotification(...a) } }));
 
-import handler, { FAIL_KEY, TEST_LIMIT, TEST_WINDOW_MS, runTick, testAllowance } from '../../api/push';
+import handler, { FAIL_KEY, TEST_LIMIT, TEST_WINDOW_MS, TIMEOUT_MS, runTick, safeEndpoint, testAllowance } from '../../api/push';
 import type { SubRow } from '../../api/push';
 
 const ENV = {
@@ -212,5 +212,50 @@ describe('tracking a device that cannot be reached', () => {
     const res = await runTick([row({ schedule: sched })], NOW, async () => 'gone');
     expect(res.updates).toEqual([]);
     expect(res.gone).toHaveLength(1);
+  });
+});
+
+describe('safe push addresses', () => {
+  it('accepts the real push services', () => {
+    for (const u of ['https://fcm.googleapis.com/fcm/send/abc', 'https://updates.push.services.mozilla.com/wpush/v2/xyz', 'https://web.push.apple.com/QAbc', 'https://wns2-par02p.notify.windows.com/w/?token=1']) expect(safeEndpoint(u)).toBe(true);
+  });
+  it('refuses anything that could reach inside a network or carry a login', () => {
+    const bad = ['http://fcm.googleapis.com/x', 'https://localhost/x', 'https://127.0.0.1/x', 'https://169.254.169.254/latest', 'https://10.0.0.5/x', 'https://db.internal/x', 'https://printer.local/x', 'https://intranet/x', 'https://user:pw@fcm.googleapis.com/x', 'https://fcm.googleapis.com:8443/x', 'ftp://fcm.googleapis.com/x', 'not a url', '', 'https://' + 'a'.repeat(2100) + '.com/x', null, 42];
+    for (const u of bad) expect(safeEndpoint(u), String(u)).toBe(false);
+  });
+});
+
+describe('push handler: unsafe addresses and slow services', () => {
+  const sched = [{ id: 'checkin', time: '21:00', days: [], title: 't', body: 'b' }];
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 12, 20, 0, 0)));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('never contacts an unsafe address and removes that device', async () => {
+    const evil = row({ endpoint: 'https://169.254.169.254/latest/meta-data', schedule: sched });
+    fetchMock.mockResolvedValueOnce(json([evil])).mockResolvedValue(json({}));
+    const r = await call('POST', `Bearer ${ENV.CRON_SECRET}`);
+    expect(r.status).toBe(200);
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(r.body).toMatchObject({ gone: ['https://169.254.169.254/latest/meta-data'] });
+    expect(fetchMock.mock.calls.some(([u, init]) => String(u).includes('endpoint=eq.') && (init as RequestInit).method === 'DELETE')).toBe(true);
+  });
+
+  it('still sends to a normal address', async () => {
+    fetchMock.mockResolvedValueOnce(json([row({ schedule: sched })])).mockResolvedValue(json({}));
+    await call('POST', `Bearer ${ENV.CRON_SECRET}`);
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(sendNotification.mock.calls[0][2]).toMatchObject({ timeout: TIMEOUT_MS });
+  });
+
+  it('puts a time limit on every call it makes to Supabase', async () => {
+    fetchMock.mockResolvedValueOnce(json([]));
+    await call('POST', `Bearer ${ENV.CRON_SECRET}`);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    fetchMock.mockReset().mockResolvedValueOnce(json({ id: 'u1', app_metadata: {} })).mockResolvedValueOnce(json({})).mockResolvedValueOnce(json([]));
+    await call('POST', 'Bearer some-session-token');
+    for (const [, init] of fetchMock.mock.calls) expect((init as RequestInit).signal).toBeInstanceOf(AbortSignal);
   });
 });
