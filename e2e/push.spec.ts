@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Browser, Page } from '@playwright/test';
 import { APP, CLOUD_APP, DESKTOP, MOCK, PHONE, expectNoA11yViolations, newContext, setUpEmptyDashboard } from './helpers';
 
 // The Settings screen's push notification controls. A headless browser cannot create a real push subscription (that needs the
@@ -77,6 +77,39 @@ test.describe('push notifications in Settings', () => {
     const EMAIL = `push-${Date.now()}@example.com`; // unique per run: the mock server is shared with other specs
     const PASSWORD = 'correct-password';
     const PASSPHRASE = 'purple-elephant-42';
+
+
+    /** A fresh browser signed in to the shared test account, on the Reminders screen. */
+    const openRemindersSignedIn = async (browser: Browser) => {
+      const ctx = await newContext(browser, { viewport: DESKTOP });
+      const page = await ctx.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('dialog', (d) => void d.accept());
+      await page.goto(CLOUD_APP);
+      await page.getByRole('button', { name: 'Sign in to my account' }).click();
+      await page.getByLabel('Email').fill(EMAIL);
+      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+      await page.getByRole('button', { name: 'Sign in', exact: true }).last().click();
+      await page.getByLabel('Passphrase', { exact: true }).fill(PASSPHRASE);
+      await page.getByRole('button', { name: 'Unlock' }).click();
+      await page.getByText('Today’s plates').waitFor({ timeout: 20_000 });
+      await goToReminders(page);
+      return { ctx, page, errors };
+    };
+    const seedDevice = (endpoint: string, extra: Record<string, unknown> = {}) =>
+      fetch(`${MOCK}/__admin/push`, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: EMAIL,
+          row: { endpoint, tz: 'Africa/Lagos', p256dh: 'k', auth: 'a', schedule: [{ id: 'checkin', time: '21:00', days: [], title: 'Time to check in', body: 'Tick your plates.' }], ...extra },
+        }),
+      });
+    const clearDevices = async () => {
+      // Devices belong to the shared mock server, so each test removes the ones it added.
+      const state = (await (await fetch(`${MOCK}/__admin/state`)).json()) as { push?: { endpoint: string }[] };
+      for (const d of state.push ?? []) await fetch(`${MOCK}/__admin/push`, { method: 'DELETE', body: JSON.stringify({ endpoint: d.endpoint }) });
+    };
 
     test('signed out: asks the person to sign in, and the button opens the sign-in dialog', async ({ browser }) => {
       const ctx = await newContext(browser, { viewport: PHONE });
@@ -221,6 +254,49 @@ test.describe('push notifications in Settings', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scroll on a phone').toBe(true);
       expect(errors).toEqual([]);
       await ctx.close();
+    });
+
+    test('a device the server has not been able to reach for a day is flagged, with what to do about it', async ({ browser }) => {
+      test.setTimeout(60_000);
+      await clearDevices();
+      // The test clock is Friday 9 Oct 2026, 10:00 in Lagos. One device has failed for three days, the other for an hour.
+      await seedDevice('https://web.push.apple.com/' + 'd'.repeat(30), { failing_since: '2026-10-06T10:00:00Z', last_error: '403' });
+      await seedDevice('https://fcm.googleapis.com/fcm/send/' + 'e'.repeat(30), { failing_since: '2026-10-09T08:30:00Z', last_error: 'network' });
+      const { ctx, page, errors } = await openRemindersSignedIn(browser);
+      const box = page.locator('.push-box');
+      await box.getByRole('button', { name: 'Check what the server has' }).click();
+      const view = box.getByRole('region', { name: 'What the server has' });
+      const apple = view.locator('.server-dev', { hasText: 'Apple (Safari or iPhone)' });
+      const chrome = view.locator('.server-dev', { hasText: 'Chrome or Android' });
+      await expect(apple).toContainText('Couldn’t reach it since 6 Oct (the push service said 403). Turn push off and on again on that device.');
+      await expect(chrome).not.toContainText('Couldn’t reach');
+      await expectNoA11yViolations(page, 'a device that cannot be reached');
+      expect(errors).toEqual([]);
+      await ctx.close();
+      await clearDevices();
+    });
+
+    test('a database that has not been given the newer columns still lists the devices, without the flag', async ({ browser }) => {
+      test.setTimeout(60_000);
+      await clearDevices();
+      await seedDevice('https://web.push.apple.com/' + 'f'.repeat(30), { failing_since: '2026-10-06T10:00:00Z', last_error: '403' });
+      await fetch(`${MOCK}/__admin/opts`, { method: 'POST', body: JSON.stringify({ pushHealth: false }) });
+      try {
+        const { ctx, page, errors } = await openRemindersSignedIn(browser);
+        const box = page.locator('.push-box');
+        await box.getByRole('button', { name: 'Check what the server has' }).click();
+        const view = box.getByRole('region', { name: 'What the server has' });
+        await expect(view.locator('.server-dev')).toHaveCount(1);
+        await expect(view).toContainText('Apple (Safari or iPhone)');
+        await expect(view.locator('.row', { hasText: 'Daily check-in' })).toContainText('21:00');
+        await expect(view).not.toContainText('Couldn’t reach');
+        await expect(box.getByRole('status').filter({ hasText: /wrong|couldn’t/i })).toHaveCount(0);
+        expect(errors).toEqual([]);
+        await ctx.close();
+      } finally {
+        await fetch(`${MOCK}/__admin/opts`, { method: 'POST', body: JSON.stringify({ pushHealth: true }) });
+        await clearDevices();
+      }
     });
   });
 });

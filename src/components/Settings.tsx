@@ -8,7 +8,7 @@ import { promptInstall, useInstall } from '../install';
 import { RegionUnits } from './RegionUnits';
 import { useCloud } from '../cloud/CloudProvider';
 import { currentSubscription, deviceZone, markPushOn, pushSupport, pushWanted, refreshPush, rowFrom, showLocalTest, subscribeThisDevice } from '../push';
-import { describeDevices, nextForRow } from '../pushPreview';
+import { describeDevices, failingText, nextForRow } from '../pushPreview';
 import type { DeviceView } from '../pushPreview';
 import { buildIcs, downloadIcs, loadReminders, saveReminders } from '../reminders';
 import type { ReminderPlan } from '../reminders';
@@ -41,6 +41,8 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [view, setView] = useState<DeviceView[] | null>(null);
+  // Set when the server has not been able to reach THIS device for a day or more. Looked up quietly when this screen opens.
+  const [stale, setStale] = useState<DeviceView['failing']>(null);
   const signedIn = cloud.configured && !!cloud.email;
 
   // Is this device already subscribed (from an earlier visit)? The browser is the source of truth, not our memory of it.
@@ -51,6 +53,28 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!on || !signedIn) {
+      setStale(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      try {
+        const rows = await cloud.listPush();
+        const sub = await currentSubscription();
+        const mine = describeDevices(rows, sub?.endpoint ?? null, plan, getProgram(), new Date(), deviceZone()).find((d) => d.isThis);
+        if (alive) setStale(mine?.failing ?? null);
+      } catch {
+        /* a quiet check: nothing to say if it cannot be made */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, signedIn]);
 
   // Changed a time or switched a reminder? Tell the server, so what it sends matches what this screen says.
   useEffect(() => {
@@ -180,6 +204,11 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
               <span className="muted-s">Each device is turned on separately.</span>
             </div>
           )}
+          {on && stale && (
+            <p className="err" role="status">
+              {failingText(stale, true)}
+            </p>
+          )}
           {signedIn && (
             <div className="row-action">
               <button className="btn" disabled={busy} onClick={() => void check()}>
@@ -200,6 +229,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
                       {d.service} · time zone {d.tz} · updated {d.updatedAgo}
                     </small>
                   </p>
+                  {d.failing && <p className="err">{failingText(d.failing, d.isThis)}</p>}
                   {d.items.length === 0 ? (
                     <p className="note">No reminders are switched on for this device.</p>
                   ) : (

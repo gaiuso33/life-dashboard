@@ -120,7 +120,7 @@ describe('running a tick', () => {
     const { send, calls } = sender('ok');
     const res = await runTick([row({ tz: 'America/Los_Angeles' })], NOW, send);
     expect(calls).toHaveLength(0);
-    expect(res).toEqual({ updates: [], gone: [], sent: 0, retry: 0 });
+    expect(res).toEqual({ updates: [], gone: [], healthUpdates: [], due: 0, sent: 0, retry: 0 });
   });
   it('leaves a failed send unmarked so the next minute tries again', async () => {
     const { send } = sender('retry');

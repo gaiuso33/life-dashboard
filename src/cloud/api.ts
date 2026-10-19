@@ -210,7 +210,11 @@ export class CloudApi implements VaultApi {
 
   /** Every device saved on this account, as the server holds it (row-level rules mean only the person's own rows come back). */
   async listPush(): Promise<ServerRow[]> {
-    const r = await this.restCall('/push_subscriptions?select=endpoint,tz,schedule,last_sent,updated_at&order=updated_at.desc&limit=50', { method: 'GET' });
+    const query = (columns: string) => `/push_subscriptions?select=${columns}&order=updated_at.desc&limit=50`;
+    const base = 'endpoint,tz,schedule,last_sent,updated_at';
+    let r = await this.restCall(query(`${base},failing_since,last_error`), { method: 'GET' });
+    // A 400 here means the newer columns are not in the database yet (supabase/push.sql has not been run again): ask without them.
+    if (r.status === 400) r = await this.restCall(query(base), { method: 'GET' });
     if (!r.ok) return this.failure(r);
     const rows = (await r.json().catch(() => [])) as unknown;
     return Array.isArray(rows) ? (rows as ServerRow[]).filter((x) => x && typeof x.endpoint === 'string' && typeof x.tz === 'string') : [];

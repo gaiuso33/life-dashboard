@@ -3,7 +3,7 @@ import { WINDOW_MINUTES as SERVER_WINDOW, dueReminders } from '../../api/push';
 import { DEFAULT_PROGRAM } from '../program';
 import { DEFAULT_REMINDERS } from '../reminders';
 import { buildPushSchedule } from '../push';
-import { WINDOW_MINUTES, agoText, daysText, describeDevices, fireText, nextFire, nextForRow, readSchedule, serviceName, zonedParts } from '../pushPreview';
+import { FAILING_AFTER_HOURS, WINDOW_MINUTES, agoText, daysText, describeDevices, failingInfo, failingText, fireText, nextFire, nextForRow, readSchedule, serviceName, zonedParts } from '../pushPreview';
 
 // Friday 9 Oct 2026, 10:00 in Lagos (UTC+1).
 const NOW = new Date('2026-10-09T10:00:00+01:00');
@@ -153,5 +153,59 @@ describe('describing the devices on an account', () => {
     const v = describeDevices([row('https://web.push.apple.com/phone')], null, plan, DEFAULT_PROGRAM, NOW, LAGOS);
     expect(v).toHaveLength(1);
     expect(v[0].isThis).toBe(false);
+  });
+});
+
+describe('telling the person a device cannot be reached', () => {
+  const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
+
+  it('says nothing for a short blip, and speaks up once it has lasted a day', () => {
+    expect(FAILING_AFTER_HOURS).toBe(24);
+    expect(failingInfo({ failing_since: hoursAgo(1), last_error: '500' }, NOW, LAGOS)).toBeNull();
+    expect(failingInfo({ failing_since: hoursAgo(23.9), last_error: '500' }, NOW, LAGOS)).toBeNull();
+    expect(failingInfo({ failing_since: hoursAgo(24), last_error: '500' }, NOW, LAGOS)).toMatchObject({ hours: 24, code: '500' });
+    expect(failingInfo({ failing_since: hoursAgo(75.5), last_error: null }, NOW, LAGOS)).toMatchObject({ hours: 75, code: null });
+  });
+  it('says nothing when there is no note, or the note is unreadable', () => {
+    for (const bad of [null, undefined, '', 'yesterday', '2026-13-45']) expect(failingInfo({ failing_since: bad as string | null, last_error: '403' }, NOW, LAGOS), String(bad)).toBeNull();
+    expect(failingInfo({}, NOW, LAGOS)).toBeNull();
+  });
+  it('names the day it started in the viewer’s own time zone', () => {
+    const row = { failing_since: '2026-10-07T23:30:00Z', last_error: '410' }; // 00:30 on the 8th in Lagos, still the 7th in Los Angeles
+    expect(failingInfo(row, NOW, LAGOS)?.since).toBe('8 Oct');
+    expect(failingInfo(row, NOW, 'America/Los_Angeles')?.since).toBe('7 Oct');
+    expect(failingInfo(row, NOW, 'Not/AZone')?.since).toBe('7 Oct'); // a broken zone falls back to UTC rather than failing
+  });
+  it('keeps the error code short and plain', () => {
+    expect(failingInfo({ failing_since: hoursAgo(30), last_error: '  403  ' }, NOW, LAGOS)?.code).toBe('403');
+    expect(failingInfo({ failing_since: hoursAgo(30), last_error: 'x'.repeat(100) }, NOW, LAGOS)?.code).toHaveLength(30);
+    expect(failingInfo({ failing_since: hoursAgo(30), last_error: '   ' }, NOW, LAGOS)?.code).toBeNull();
+    expect(failingInfo({ failing_since: hoursAgo(30), last_error: 42 as unknown as string }, NOW, LAGOS)?.code).toBeNull();
+  });
+  it('explains in words and says what to do', () => {
+    const f = (code: string | null) => ({ since: '17 Oct', hours: 40, code });
+    expect(failingText(f('403'), true)).toBe('Couldn’t reach this device since 17 Oct (the push service said 403). Turn push off and on again.');
+    expect(failingText(f('network'), true)).toContain('(no connection to the push service)');
+    expect(failingText(f('blocked'), true)).toContain('(its address was refused)');
+    expect(failingText(f(null), true)).toBe('Couldn’t reach this device since 17 Oct. Turn push off and on again.');
+    expect(failingText(f('whatever'), true)).toBe('Couldn’t reach this device since 17 Oct. Turn push off and on again.'); // an unknown code is not shown raw
+    expect(failingText(f('500'), false)).toBe('Couldn’t reach it since 17 Oct (the push service said 500). Turn push off and on again on that device.');
+  });
+  it('is attached to the right devices when describing an account', () => {
+    const plan = { ...DEFAULT_REMINDERS };
+    const mine = 'https://fcm.googleapis.com/fcm/send/mine';
+    const base = { tz: LAGOS, schedule: buildPushSchedule(plan, DEFAULT_PROGRAM), last_sent: {}, updated_at: hoursAgo(1) };
+    const rows = [
+      { ...base, endpoint: 'https://web.push.apple.com/phone', failing_since: hoursAgo(50), last_error: '403' },
+      { ...base, endpoint: mine, failing_since: hoursAgo(2), last_error: 'network' },
+    ];
+    const v = describeDevices(rows, mine, plan, DEFAULT_PROGRAM, NOW, LAGOS);
+    expect(v[0].isThis).toBe(true);
+    expect(v[0].failing).toBeNull(); // only two hours: not worth mentioning yet
+    expect(v[1].failing).toMatchObject({ code: '403', hours: 50 });
+    // and a database that has not been given the newer columns gives rows without them, which must still work
+    const old = describeDevices([{ ...base, endpoint: mine }], mine, plan, DEFAULT_PROGRAM, NOW, LAGOS);
+    expect(old[0].failing).toBeNull();
+    expect(old[0].items.length).toBeGreaterThan(0);
   });
 });

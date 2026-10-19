@@ -95,6 +95,42 @@ export interface ServerRow {
   schedule: unknown;
   last_sent: unknown;
   updated_at?: string;
+  /** When the server started failing to reach this device, and the error it got. Absent until supabase/push.sql is re-run. */
+  failing_since?: string | null;
+  last_error?: string | null;
+}
+
+/** A device the server has not been able to reach for this long is worth telling the person about. A shorter blip is not. */
+export const FAILING_AFTER_HOURS = 24;
+
+export interface Failing {
+  /** The day it started, such as "17 Oct", in the viewer's own time zone. */
+  since: string;
+  hours: number;
+  /** The push service's error code, "network", or "blocked"; null when not known. */
+  code: string | null;
+}
+
+export function failingInfo(row: Pick<ServerRow, 'failing_since' | 'last_error'>, now: Date, viewerTz: string): Failing | null {
+  const t = row.failing_since ? Date.parse(row.failing_since) : NaN;
+  if (Number.isNaN(t)) return null;
+  const hours = (now.getTime() - t) / 3_600_000;
+  if (hours < FAILING_AFTER_HOURS) return null;
+  const fmt = (timeZone: string) => new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short' }).format(new Date(t));
+  let since: string;
+  try {
+    since = fmt(viewerTz);
+  } catch {
+    since = fmt('UTC');
+  }
+  const code = typeof row.last_error === 'string' && row.last_error.trim() ? row.last_error.trim().slice(0, 30) : null;
+  return { since, hours: Math.floor(hours), code };
+}
+
+/** What to tell the person, and what to do about it. */
+export function failingText(f: Failing, thisDevice: boolean): string {
+  const why = !f.code ? '' : f.code === 'network' ? ' (no connection to the push service)' : f.code === 'blocked' ? ' (its address was refused)' : /^\d+$/.test(f.code) ? ` (the push service said ${f.code})` : '';
+  return `Couldn’t reach ${thisDevice ? 'this device' : 'it'} since ${f.since}${why}. Turn push off and on again${thisDevice ? '' : ' on that device'}.`;
 }
 
 /** Reads a stored schedule defensively: anything malformed is skipped. */
@@ -129,6 +165,8 @@ export interface DeviceView {
   tz: string;
   updatedAgo: string;
   items: ItemView[];
+  /** Set when the server has not been able to reach the device for a day or more. */
+  failing: Failing | null;
   /** For this device only: the server holds exactly what the screen says. Always true for other devices. */
   inSync: boolean;
 }
@@ -168,6 +206,7 @@ export function describeDevices(rows: ServerRow[], thisEndpoint: string | null, 
       isThis,
       service: serviceName(r.endpoint),
       tz: r.tz,
+      failing: failingInfo(r, now, deviceTz),
       updatedAgo: agoText(r.updated_at, now),
       items: schedule.map((i) => ({
         id: i.id,

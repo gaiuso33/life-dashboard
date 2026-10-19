@@ -15,6 +15,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Fails the build if anything the app or the push function ships with (react, react-dom, web-push and what they pull in)
+      # has a known vulnerability. Build and test tools are checked separately by hand; see README section 29.
+      - run: npm audit --omit=dev
       - run: npx tsc --noEmit
       - run: npx tsc -p e2e/tsconfig.json
       - run: npm test

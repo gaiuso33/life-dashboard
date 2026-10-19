@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 const PORT = Number(process.env.MOCK_PORT ?? 4600);
 const ANON = 'test-anon';
-const fresh = () => ({ users: new Map(), vaults: new Map(), push: new Map(), tokens: new Map(), log: [], sent: [], opts: { confirmEmail: false, ttlMs: 3600e3 } });
+const fresh = () => ({ users: new Map(), vaults: new Map(), push: new Map(), tokens: new Map(), log: [], sent: [], opts: { confirmEmail: false, ttlMs: 3600e3, pushHealth: true } });
 let st = fresh();
 const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'apikey,authorization,content-type,prefer,x-client-info', 'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS' };
 
@@ -40,13 +40,23 @@ http
         liveAccessTokens: [...st.tokens].filter(([, t]) => !t.refresh && t.exp > Date.now()).map(([k]) => k),
         log: st.log,
         sent: st.sent,
+        push: [...st.push.values()].map((p) => ({ endpoint: p.endpoint, user_id: p.user_id })),
       });
+    }
+    // Test hook: change a setting without wiping anything (for example pushHealth: false, a database that has not had the newer columns added).
+    if (url.pathname === '/__admin/opts' && q.method === 'POST') {
+      Object.assign(st.opts, body);
+      return send(200, st.opts);
     }
     // Test hook: save a push device row for the account with this email, as if its phone had turned push on.
     if (url.pathname === '/__admin/push' && q.method === 'POST') {
       const u = [...st.users.values()].find((x) => x.email === body.email);
       if (!u) return send(404, { error: 'no such user' });
       st.push.set(body.row.endpoint, { last_sent: {}, updated_at: new Date().toISOString(), ...body.row, user_id: u.id });
+      return send(200, {});
+    }
+    if (url.pathname === '/__admin/push' && q.method === 'DELETE') {
+      st.push.delete(body.endpoint);
       return send(200, {});
     }
     if (url.pathname === '/__admin/reset') {
@@ -105,7 +115,10 @@ http
       const uid = who();
       if (!uid) return send(401, { message: 'JWT expired', code: 'PGRST301' });
       const mine = () => [...st.push.values()].filter((p) => p.user_id === uid);
-      if (q.method === 'GET') return send(200, mine().map(({ user_id, p256dh, auth, ...rest }) => rest));
+      if (q.method === 'GET') {
+        if (!st.opts.pushHealth && /failing_since|last_error/.test(url.searchParams.get('select') ?? '')) return send(400, { message: 'column push_subscriptions.failing_since does not exist' });
+        return send(200, mine().map(({ user_id, p256dh, auth, failing_since, last_error, ...rest }) => (st.opts.pushHealth ? { ...rest, failing_since: failing_since ?? null, last_error: last_error ?? null } : rest)));
+      }
       if (q.method === 'POST') {
         if (body.user_id !== uid) return send(403, { message: 'row-level security' });
         st.push.set(body.endpoint, { last_sent: {}, ...st.push.get(body.endpoint), ...body });

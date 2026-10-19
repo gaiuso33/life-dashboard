@@ -96,7 +96,7 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 
 ## 7. Open items
 - GitHub sync reads public commits on default branches only, for the last 90 days. Private repositories and other branches don't appear, so the Today screen keeps a manual "mark done" for coding days.
-- Push notifications are built (section 26) but have not been tried on a real phone yet.
+- Push notifications are built (section 26) and a scheduled reminder has been confirmed arriving on the owner's own device. The rest of the real-phone checklist (Android and iPhone separately, tapping a notification, a time-zone change, sign-out) is still open (issue #13).
 
 ## 8. Advisor (built)
 - Works offline without a key: daily nudges, weekly review (this week so far or last week), trend forecasts for weight, survival fund, portfolio pace and training volume.
@@ -165,8 +165,8 @@ Without those two values the app works exactly as before and the cloud section s
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
 
 ## 16. Testing (built)
-- `npm test`: 226 unit tests (incl. the statement importer, reminders, push scheduling and its on-screen preview, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
-- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 77 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, new versions reaching an installed app, bills and income recorded in Money, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
+- `npm test`: 278 unit tests (incl. the statement importer, reminders, the push function and its on-screen preview, forecasting and units) (merge, plan, advisor, setup, resilience incl. a corruption fuzz, cloud crypto and two-device sync).
+- `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 79 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, new versions reaching an installed app, bills and income recorded in Money, cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs typecheck, unit tests and build on every push, and the browser tests as a separate job (the report is kept when it fails).
 - Not covered: real phones, screen readers, the real Supabase service, and the live Claude API.
 
@@ -240,14 +240,14 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 **How it runs.**
 - `src/push.ts` asks permission (only from a tap), subscribes the device, and keeps the server's copy current after a sync or when the times, programme days or time zone change.
 - `public/sw.js` shows each push and opens the app when tapped.
-- `api/push.ts` is one Vercel function with two callers. Supabase's scheduler calls it every minute with the shared `CRON_SECRET`; it works out which reminders are due in each device's *own* time zone and sends them. A signed-in person calls it with their own session token to send a test to their own devices.
+- `api/push.ts` is one Vercel function with two callers. Supabase's scheduler calls it every minute with the shared `CRON_SECRET`; it works out which reminders are due in each device's *own* time zone and sends them. A signed-in person calls it with their own session token to send a test to their own devices (at most five an hour). What it does when something is wrong, what it logs, and how to rotate its secrets are in section 29.
 - A reminder goes out once per local day. If a send fails it is retried each minute for 15 minutes, then dropped rather than arriving hours late. A push address the browser reports as dead is deleted.
 
 **Setting it up (once).**
 1. Make a key pair: `npx web-push generate-vapid-keys`.
 2. In Vercel, add the environment variables: `VITE_VAPID_PUBLIC_KEY` (the public key; the app reads it at build time), and server-only `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` your email), `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings → API; it bypasses all row rules, so never put it in a `VITE_` variable) and `CRON_SECRET` (a long random string).
 3. Redeploy, so the public key is built into the app.
-4. In the Supabase SQL editor run `supabase/push.sql`. Then enable the `pg_cron` and `pg_net` extensions (Database → Extensions) and run the commented `cron.schedule` block at the bottom of that file, with your app address and the same `CRON_SECRET`.
+4. In the Supabase SQL editor run `supabase/push.sql`. Then enable the `pg_cron` and `pg_net` extensions (Database → Extensions) and run the commented `cron.schedule` block at the bottom of that file, with your app address and the same `CRON_SECRET`. If you set push up earlier, run `supabase/push.sql` once more (it is safe to repeat) to add the newer parts described in section 29.
 5. On each device: Settings → Reminders → Turn on for this device → Send a test.
 
 **iPhone and iPad.** Push only works once the app is added to the Home Screen and opened from there; until then the browser hides the feature, and Settings explains this.
@@ -260,7 +260,9 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 - The next-time wording comes from `src/pushPreview.ts`, which mirrors the sender. A unit test steps through a week minute by minute against the sender's own `dueReminders` for eight situations (different zones, gym days, already sent, just missed), so the screen cannot disagree with what the server does.
 - Not covered by a browser test: the "Update the server now" button, because a headless browser cannot create a real push subscription. The comparison behind it is unit tested.
 
-**Not verified.** Actual delivery to a real phone, the Supabase scheduler calling the deployed function, and the Vercel environment (a headless browser cannot create a real push subscription). Check these once after setup with "Send a test", then wait for a real reminder.
+**Verified by the owner.** "Send a test" arrives, and a scheduled reminder arrives on its own with the app closed, so the Vercel function, the Supabase schedule and the keys are working.
+
+**Not yet verified.** The rest of the real-phone checklist (issue #13): Android and iPhone each on their own, tapping a notification, following a time-zone change, and push stopping after turning it off, signing out or deleting the account.
 - Only the four reminders exist; there are no event-based notifications (for example "streak at risk").
 - A device that has not opened the app since its time zone changed keeps the old zone until it does.
 
@@ -296,3 +298,69 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 - A bill ticked before it is due is dated today but keeps the due day's id.
 - The Today screen only reminds about bills that are coming up; it does not tick them.
 - Editing the amount or date of a recorded bill is done in Money, and the Month calendar does not follow it.
+
+## 29. Keeping the dependencies and the push function safe (built)
+
+### Dependencies (`npm audit`)
+**What was found.** `npm audit` reported 9 vulnerabilities (2 critical, 4 high, 3 moderate). **None were in what the app or the push function ships with**: `npm audit --omit=dev`, which covers `react`, `react-dom` and `web-push` and what they pull in, found nothing. All nine were in build and test tools:
+
+| Package | Severity | Where it matters |
+|---|---|---|
+| `vitest`, `tinypool` (prototype pollution leading to remote code execution), `@vitest/mocker`, `vite-node` | critical, critical, moderate, moderate | the test runner, only while tests run |
+| `vite`, `esbuild` (any website could send requests to the dev server) | high, moderate | the development server (`npm run dev`) |
+| `vite-plugin-singlefile`, through `micromatch` and `braces` (a crafted pattern can exhaust the stack) | high | the build step |
+
+These run on your computer, on GitHub's test machines and during Vercel's build. They are never part of the deployed function or of anything a browser loads, which is why none of them could reach the push function.
+
+**What was done.** `vite` 5 to 6.4.4, `vitest` 2 to 4.1.12, `vite-plugin-singlefile` to 2.3.4 and `@vitejs/plugin-react` to 4.7.0 (kept in step with `vite`). Each is past the last vulnerable version, so `npm audit` and `npm audit --omit=dev` both report 0. The larger jumps npm suggests (`vite` 8, `vitest` 5) were not needed. The typecheck, all unit and browser tests and the production build pass on the new versions, the service worker is still stamped on each build, and every new version supports the Node 20 that CI uses.
+
+**The check in CI.** `npm audit --omit=dev` runs before the typecheck, so a known vulnerability in anything that ships fails the build. Build and test tools are deliberately left out of that gate, because a new advisory for them would block unrelated work; run `npm audit` by hand now and then, and before upgrading. If the CI check fails: run `npm audit --omit=dev`, apply `npm audit fix` when a fix exists and re-run the tests, and when none exists decide whether the code is reachable and say why in the pull request. `--audit-level=high` on that CI line is the temporary escape hatch.
+
+### The push function (`api/push.ts`)
+It holds the Supabase service role key, which bypasses every row rule, so it is built to say little, trust nothing it is given, and be easy to watch.
+
+**What each caller gets.**
+
+| Caller | Reply |
+|---|---|
+| anything but POST | 405 with `Allow: POST` |
+| a key, the secret, the public key or the Supabase address is missing | 503 "Push is not set up on the server yet.", before any work |
+| no token, a token that is not shaped like a session, or the wrong secret | 401, without asking Supabase |
+| a session Supabase refuses (expired, forged, signed out) | 401 "Please sign in again." |
+| Supabase itself is down | 500, not "sign in again" |
+| the clock, with the shared secret | 200 with counts only: devices, due, sent, retry, removed, failing |
+| a person asking for a test | 200 with how many were sent, to that person's own devices only |
+| a sixth test within an hour | 429 with `Retry-After` and "Try again in N minutes." |
+
+Replies never carry internal error text. The real reason goes to the log only, and a test checks that no reply or log line ever contains a key, the secret, a token or a device address.
+
+**Limiting "Send a test".** Five per person per rolling hour, counted in `push_test_log`, a table only the server can read or write. A refused request is not counted and sends nothing. The clock's own runs are never limited. If that table does not exist yet, tests still work and the log says `push-limit-unavailable`.
+
+**Watching it.** One line per run in the Vercel logs (project, Logs, search `push-tick`): `{"evt":"push-tick","devices":..,"due":..,"sent":..,"retry":..,"removed":..,"failing":..,"capped":false,"healthColumns":true,"ms":..}`. Tests log `push-test` with counts, and failures log `push-error`. The scheduler's side is in Supabase under `cron.job_run_details`.
+
+**A device it cannot reach.** When a send fails, the server notes when it started failing and the push service's code (or `network`, or `blocked`), and clears the note after the next success. Once it has lasted 24 hours, Settings says so, for example "Couldn’t reach this device since 17 Oct (the push service said 403). Turn push off and on again." It shows when Settings opens and in "Check what the server has". A device the push service says no longer exists (404 or 410) is simply removed.
+
+**Where it will send.** The address comes from a person's own phone, so the server only sends to `https` addresses on a real public host: never `localhost`, a numeric address, a private name such as `.local` or `.internal`, an address with a login in it, or an unusual port. Anything else is skipped and shown as "blocked". This limits what a malicious account could make the server contact. It does not catch a public name that secretly points at a private address; the message is an encrypted notification and the reply is never read, but an allow-list of the known push services belongs on the multi-user security review (issue #31).
+
+**Limits on time and size.** Every outside call gives up after 8 seconds, so a slow service cannot hang a run. One run reads at most 5,000 devices and logs `capped:true` when it reaches that (issue #30).
+
+**Older databases.** `supabase/push.sql` is safe to run again. If you set push up before this section existed, run it once more to add the unreachable-device note (`failing_since`, `last_error`) and `push_test_log`. Until you do, everything keeps working: the function and the app each fall back when the columns are missing, Settings just cannot show the note, tests are not limited, and what was sent is saved on its own, so a missing column can never cause a repeated reminder.
+
+### Changing a secret
+- **`CRON_SECRET`.** Choose a new long random string, set it in Vercel and redeploy, then change the schedule in the Supabase SQL editor straight away (the 15-minute late window covers the gap, so a reminder due in between still goes out):
+  ```sql
+  select cron.unschedule('life-dashboard-push');
+  select cron.schedule('life-dashboard-push', '* * * * *',
+    $$ select net.http_post(
+         url := 'https://YOUR-APP-ADDRESS/api/push',
+         headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer NEW-SECRET'),
+         body := '{}'::jsonb, timeout_milliseconds := 20000) $$);
+  ```
+  Then check `cron.job_run_details` shows a success and the Vercel log shows `push-tick`.
+- **VAPID keys.** Changing them invalidates every saved device, because each was subscribed with the old public key. Make a new pair (`npx web-push generate-vapid-keys`), set `VITE_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in Vercel, redeploy, then on each device turn push off and on again. Until a device does, its sends fail and it is flagged after a day.
+- **`SUPABASE_SERVICE_ROLE_KEY`.** Anyone holding it can read and change every row, so rotate it at once if it ever appears in a screenshot, a chat, the repository or a log. Rotate it in Supabase (Project Settings, API; the exact steps depend on whether the project uses the newer API keys or the older JWT secret, so follow Supabase's own page), update it in Vercel and redeploy. The `VITE_` variables are public by design and need no such care.
+
+### Checked by tests
+`src/__tests__/pushapi.test.ts` calls the function the way each caller would, against a fake Supabase and a fake sender: every row of the table above, the rate limit sliding over time and not mixing people up, the unreachable-device note being written once, kept and cleared, an older database, unsafe addresses, and secrets never appearing in a reply or log. `src/__tests__/pushclient.test.ts` covers the app's side (falling back when the columns are missing, the 429 message). `src/__tests__/pushpreview.test.ts` covers the wording and the 24-hour threshold. `e2e/push.spec.ts` shows the flag on a device in "Check what the server has" and checks that an older database still lists devices. Three safeguards were broken on purpose (the older-database fallback, the test limit, the address check) and each made a test fail.
+
+**Not verified.** The real function against the real Supabase and push services (the tests use fakes), and the notice for *this* device and the "wait N minutes" message on screen, because both need a real push subscription, which a headless browser cannot make. The same code is shown for other devices by a browser test, and the message is checked at the app's API layer.
