@@ -169,6 +169,8 @@ export interface DeviceView {
   failing: Failing | null;
   /** For this device only: the server holds exactly what the screen says. Always true for other devices. */
   inSync: boolean;
+  /** "3 hours ago" when the server's last attempt to reach this device failed, otherwise null. */
+  unreachable: string | null;
 }
 
 export function serviceName(endpoint: string): string {
@@ -216,6 +218,7 @@ export function describeDevices(rows: ServerRow[], thisEndpoint: string | null, 
         next: fireText(nextFire(i, r.tz, now, r.last_sent)),
         lastSent: typeof asObject(r.last_sent)[i.id] === 'string' ? (asObject(r.last_sent)[i.id] as string) : null,
       })),
+      unreachable: typeof asObject(r.last_sent)._fail === 'string' && !Number.isNaN(Date.parse(asObject(r.last_sent)._fail as string)) ? agoText(asObject(r.last_sent)._fail as string, now) : null,
       inSync: !isThis || (JSON.stringify(schedule) === wanted && r.tz === deviceTz),
     };
   });

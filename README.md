@@ -141,7 +141,8 @@ A dark, data-heavy personal dashboard that turns daily check-ins into visible pr
 - **Crashes**: an error boundary around each screen keeps the rest of the app usable; an app-level boundary offers Download my data and Restore the last backup.
 - **Accessibility**: automated axe-core audit (WCAG 2 A/AA) is clean on every screen at desktop width. Not yet checked with a real screen reader.
 - **Security headers**: `vercel.json` sets a CSP (inline scripts are still allowed because the build is a single inlined file), nosniff, no-referrer and a restrictive Permissions-Policy.
-- **Tests**: see section 16. GitHub Actions runs typecheck, tests and build on every push.
+- **Tests**: see section 16. GitHub Actions (Node 22) runs typecheck, tests, build and `npm audit --omit=dev` on every push.
+- **Dependencies**: `npm audit` reports 0 vulnerabilities (checked 18 Oct 2026, after moving to Vite 6 and Vitest 5). Before that, the 9 findings were all in dev tools (the dev server and test runner, never shipped to the app); the code that runs in people's browsers and on the server (`react`, `react-dom`, `web-push`) was clean. CI now fails if a shipped dependency gets a known vulnerability. Node 22.12 or newer is required (`engines` in `package.json`).
 - **Not done**: real-device testing (see section 24).
 
 ## 14. Accounts and cloud sync (built, needs a Supabase project)
@@ -263,6 +264,15 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 **Verified by the owner.** "Send a test" arrives, and a scheduled reminder arrives on its own with the app closed, so the Vercel function, the Supabase schedule and the keys are working.
 
 **Not yet verified.** The rest of the real-phone checklist (issue #13): Android and iPhone each on their own, tapping a notification, following a time-zone change, and push stopping after turning it off, signing out or deleting the account.
+**Safety and upkeep of the sender (`api/push.ts`).**
+- It answers `405` to anything but POST, `503` if any server setting is missing, `401` with no or an invalid/expired session token, and a plain `500` otherwise. Responses are never cached, and error messages never contain a key, secret, address or schedule. `src/__tests__/pushhandler.test.ts` calls the real handler for every one of these cases.
+- **Send a test** is limited to 5 per person per hour (`429`, "Try again in N minutes"). The count is kept on the person's own Supabase account (`app_metadata.push_tests`, written with the service role key), so no table change is needed. If recording the count fails, the test still goes out.
+- Each run writes one log line to Vercel (`push tick: 3 devices, 1 due, 1 sent, 0 failed, 0 removed`). Counts only: no addresses, keys or reminder text.
+- A device the push service keeps refusing (not dead, just failing) is marked in `last_sent._fail` with the time it first failed, and the mark clears when a send gets through. "Check what the server has" then shows *The server could not reach this device (first failed 3 h ago)*. Dead addresses (404 and 410) are still deleted.
+- **Rotating `CRON_SECRET`:** (1) set a new long random value in Vercel and redeploy; (2) in the Supabase SQL editor run `select cron.unschedule('life-dashboard-push');` and then the `cron.schedule` block from `supabase/push.sql` again with the new value. Between steps 1 and 2 the clock gets `401`s and no reminders go out, so do both in one sitting. Nothing in the app or on any phone changes.
+- **Rotating the VAPID keys:** only do this if the private key leaks. Generate a new pair (`npx web-push generate-vapid-keys`), set `VITE_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in Vercel and redeploy. **Every saved device stops working**, because each subscription is tied to the key it was made with. Each device then has to open Settings -> Reminders and turn push off and on again; the old rows are removed automatically when the push service reports them dead. Rotating `SUPABASE_SERVICE_ROLE_KEY` only needs the new value in Vercel and a redeploy.
+
+**Not verified.** Actual delivery to a real phone, the Supabase scheduler calling the deployed function, and the Vercel environment (a headless browser cannot create a real push subscription). Check these once after setup with "Send a test", then wait for a real reminder.
 - Only the four reminders exist; there are no event-based notifications (for example "streak at risk").
 - A device that has not opened the app since its time zone changed keeps the old zone until it does.
 

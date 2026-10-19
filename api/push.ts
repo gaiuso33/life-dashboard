@@ -46,6 +46,19 @@ export interface Payload {
 /** A reminder that is a few minutes late (the clock can drift or skip) still goes out, but not one that is hours late. */
 export const WINDOW_MINUTES = 15;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+/** Key inside `last_sent` that holds when a device first could not be reached. Reminder ids cannot look like this. */
+export const FAIL_KEY = '_fail';
+/** "Send a test" is limited per person so a stuck button or a script cannot spam their phones. */
+export const TEST_LIMIT = 5;
+export const TEST_WINDOW_MS = 60 * 60_000;
+
+/** Which earlier test sends still count against the limit, and whether another is allowed (and if not, minutes to wait). */
+export function testAllowance(stamps: unknown, now: number): { recent: number[]; allowed: boolean; waitMinutes: number } {
+  const recent = (Array.isArray(stamps) ? stamps : []).filter((t): t is number => typeof t === 'number' && Number.isFinite(t) && t > now - TEST_WINDOW_MS && t <= now).sort((a, b) => a - b);
+  if (recent.length < TEST_LIMIT) return { recent, allowed: true, waitMinutes: 0 };
+  const free = recent[recent.length - TEST_LIMIT] + TEST_WINDOW_MS;
+  return { recent, allowed: false, waitMinutes: Math.max(1, Math.ceil((free - now) / 60_000)) };
+}
 
 /** The date, weekday and minutes-since-midnight at `now` in a time zone, or null if the zone is not a real one. */
 export function localParts(now: Date, tz: string): { date: string; weekday: number; minutes: number } | null {
@@ -140,6 +153,9 @@ export async function runTick(rows: SubRow[], now: Date, send: (row: SubRow, p: 
       let anyOk = false;
       let dead = false;
       let failCode: string | undefined;
+      let okHere = 0;
+      let failHere = 0;
+      let goneHere = false;
       for (const r of due) {
         const raw = await send(row, { title: r.title, body: r.body, tag: r.id }).catch((): SendOutcome => ({ result: 'retry', code: 'network' }));
         const out = typeof raw === 'string' ? { result: raw, code: undefined } : raw;
@@ -165,10 +181,29 @@ export async function runTick(rows: SubRow[], now: Date, send: (row: SubRow, p: 
         } else if (failCode && (!row.failing_since || row.last_error !== failCode)) {
           res.healthUpdates.push({ endpoint: row.endpoint, failing_since: row.failing_since ?? now.toISOString(), last_error: failCode });
         }
+          okHere++;
+        } else if (out === 'gone') {
+          res.gone.push(row.endpoint);
+          goneHere = true;
+          break;
+        } else {
+          res.retry++;
+          failHere++;
+        }
+      }
+      if (goneHere) continue;
+      // Remember when a device first could not be reached (Settings shows it), and forget it once a send gets through.
+      if (failHere && !okHere && typeof sent[FAIL_KEY] !== 'string') {
+        sent[FAIL_KEY] = now.toISOString();
+        changed = true;
+      }
+      if (okHere && FAIL_KEY in sent) {
+        delete sent[FAIL_KEY];
+        changed = true;
       }
       if (changed) {
         // Forget entries for reminders that no longer exist so the map doesn't grow.
-        const keep = new Set(cleanSchedule(row.schedule).map((r) => r.id));
+        const keep = new Set([FAIL_KEY, ...cleanSchedule(row.schedule).map((r) => r.id)]);
         for (const k of Object.keys(sent)) if (!keep.has(k)) delete sent[k];
         res.updates.push({ endpoint: row.endpoint, last_sent: sent });
       }
@@ -355,6 +390,34 @@ async function test(d: Deps, token: string): Promise<{ sent: number; devices: nu
 
   const r = await rest(d, `/push_subscriptions?select=${BASE_COLUMNS}&user_id=eq.${enc(id)}`);
   if (!r.ok) throw new Error(`Could not read the person's devices (${r.status})`);
+  const summary = { devices: rows.length, due: result.sent + result.retry, sent: result.sent, retry: result.retry, gone: result.gone.length };
+  // Counts only: never addresses, keys or anyone's schedule.
+  console.log(`push tick: ${summary.devices} devices, ${summary.due} due, ${summary.sent} sent, ${summary.retry} failed, ${summary.gone} removed`);
+  return { ...result, devices: rows.length };
+}
+
+/** Sends a test to the signed-in person's own devices. The session token is checked with Supabase, not trusted. */
+async function test(token: string): Promise<{ sent: number; devices: number }> {
+  const who = await fetch(`${supabaseUrl()}/auth/v1/user`, { headers: { apikey: env('VITE_SUPABASE_ANON_KEY') || env('SUPABASE_ANON_KEY') || env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${token}` } });
+  if (!who.ok) throw Object.assign(new Error('Please sign in again.'), { status: 401 });
+  const me = (await who.json()) as { id?: string; app_metadata?: Record<string, unknown> };
+  const id = me.id;
+  if (!id) throw Object.assign(new Error('Please sign in again.'), { status: 401 });
+  const now = Date.now();
+  const meta = asObject(me.app_metadata);
+  const limit = testAllowance(meta.push_tests, now);
+  if (!limit.allowed) {
+    console.log('push test: refused, limit reached');
+    throw Object.assign(new Error(`Too many tests. Try again in ${limit.waitMinutes} minute${limit.waitMinutes === 1 ? '' : 's'}.`), { status: 429, public: true });
+  }
+  // Counted before sending. If recording it fails the test still goes (the limit is a courtesy, not a gate worth breaking).
+  await fetch(`${supabaseUrl()}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { apikey: env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_metadata: { ...meta, push_tests: [...limit.recent, now] } }),
+  }).catch(() => undefined);
+  const r = await rest(`/push_subscriptions?select=${COLUMNS}&user_id=eq.${encodeURIComponent(id)}`);
+  if (!r.ok) throw new Error('Could not read your devices.');
   const rows = (await r.json()) as SubRow[];
   const send = guarded(await d.makeSender());
   let sent = 0;
@@ -402,6 +465,31 @@ export function createHandler(d: Deps) {
       return void res.status(status).json({ error: status === 401 ? 'Please sign in again.' : 'Something went wrong sending notifications.' });
     }
   };
+  console.log(`push test: ${rows.length} devices, ${sent} sent`);
+  return { sent, devices: rows.length };
+}
+
+export default async function handler(req: Req, res: Res): Promise<void> {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return void res.status(405).json({ error: 'POST only' });
+  }
+  const missing = ['SUPABASE_SERVICE_ROLE_KEY', 'VAPID_PRIVATE_KEY', 'CRON_SECRET'].filter((k) => !env(k));
+  if (!supabaseUrl() || !(env('VITE_VAPID_PUBLIC_KEY') || env('VAPID_PUBLIC_KEY')) || missing.length) {
+    return void res.status(503).json({ error: 'Push is not set up on the server yet.' });
+  }
+  const token = header(req, 'authorization').replace(/^Bearer\s+/i, '');
+  try {
+    if (sameSecret(token, env('CRON_SECRET'))) return void res.status(200).json(await tick());
+    if (!token) return void res.status(401).json({ error: 'Not allowed.' });
+    return void res.status(200).json(await test(token));
+  } catch (e) {
+    const status = (e as { status?: number }).status ?? 500;
+    if (status === 500) console.error('push: failed');
+    const message = status === 401 ? 'Please sign in again.' : status === 429 ? (e as Error).message : 'Something went wrong sending notifications.';
+    return void res.status(status).json({ error: message });
+  }
 }
 
 // ---- The real thing ----

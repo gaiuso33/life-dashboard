@@ -230,6 +230,11 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
                     </small>
                   </p>
                   {d.failing && <p className="err">{failingText(d.failing, d.isThis)}</p>}
+                  {d.unreachable && (
+                    <p className="note" role="status">
+                      The server could not reach this device (first failed {d.unreachable}). It keeps trying. If this stays, turn push off and on again on that device.
+                    </p>
+                  )}
                   {d.items.length === 0 ? (
                     <p className="note">No reminders are switched on for this device.</p>
                   ) : (
