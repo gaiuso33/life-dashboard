@@ -135,6 +135,15 @@ export function sanitize(input: AppData): AppData {
   const savePct = num(money.savePct);
   const program = p.program != null && programError(p.program as never) == null ? (p.program as AppData['program']) : undefined;
   const cats = strings(money.categories);
+  // What the app learned about descriptions: kept only as plain short text pairs, and never more than it would itself keep.
+  const learned: Record<string, string> | undefined =
+    money.learned != null && typeof money.learned === 'object' && !Array.isArray(money.learned)
+      ? Object.fromEntries(
+          Object.entries(money.learned as Record<string, unknown>)
+            .filter((e): e is [string, string] => typeof e[1] === 'string' && e[0].length > 0 && e[0].length <= 60 && e[1].length > 0 && e[1].length <= 40)
+            .slice(-300),
+        )
+      : undefined;
   const rawPrefs = obj(p.prefs);
   const prefs = isCurrency(rawPrefs.currency) && (rawPrefs.weightUnit === 'kg' || rawPrefs.weightUnit === 'lb') ? { currency: rawPrefs.currency, weightUnit: rawPrefs.weightUnit as 'kg' | 'lb', lengthUnit: rawPrefs.lengthUnit === 'in' ? ('in' as const) : ('cm' as const) } : undefined;
 
@@ -153,6 +162,7 @@ export function sanitize(input: AppData): AppData {
       dailyEstimate: num(money.dailyEstimate) != null && (money.dailyEstimate as number) >= 0 ? (money.dailyEstimate as number) : null,
       survivalOpening: Math.max(0, num(money.survivalOpening) ?? 0),
       ...(cats.length > 0 && { categories: cats }),
+      ...(learned && { learned }),
     },
     career: {
       githubUser: str(career.githubUser),

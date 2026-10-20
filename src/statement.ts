@@ -3,6 +3,8 @@
  * Everything runs on this device. Nothing here assumes one bank's layout: the person confirms which column is
  * which, and rows that can't be understood are counted and left out rather than guessed at.
  */
+import { merchantKey } from './learn';
+import type { Learned } from './learn';
 import type { FundKey, Txn } from './types';
 import { addDays } from './utils';
 
@@ -257,7 +259,14 @@ const RULES: [string, RegExp][] = [
   ['Food', /food|restaurant|chicken|shawarma|pizza|bakery|cafe|kfc|domino|mr ?biggs|sweet ?sensation|chicken republic|supermarket|shoprite|market|grocer|bukka|eatery|suya|\bfoodcourt\b|iya |mama |kitchen|bread|snack|drinks?\b|water\b/i],
 ];
 
-export function guessCategory(note: string, categories: string[]): string {
+/**
+ * The category for a description. What the person chose before for the same place comes first; the built-in word lists
+ * are the fallback for places they have not categorised yet.
+ */
+export function guessCategory(note: string, categories: string[], learned?: Learned): string {
+  const key = learned ? merchantKey(note) : null;
+  const known = key ? learned![key] : undefined;
+  if (known && categories.includes(known)) return known;
   for (const [name, re] of RULES) if (re.test(note) && categories.includes(name)) return name;
   return categories.includes('Other') ? 'Other' : categories[categories.length - 1] ?? 'Other';
 }
@@ -265,7 +274,7 @@ export function guessCategory(note: string, categories: string[]): string {
 const cleanNote = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-export function buildRows(table: string[][], m: Mapping, order: DateOrder, categories: string[], today: string, columns = Infinity): BuildResult {
+export function buildRows(table: string[][], m: Mapping, order: DateOrder, categories: string[], today: string, columns = Infinity, learned?: Learned): BuildResult {
   const rows: ImportRow[] = [];
   let unreadable = 0;
   let outOfRange = 0;
@@ -310,7 +319,7 @@ export function buildRows(table: string[][], m: Mapping, order: DateOrder, categ
     const note = cleanNote(cell(r, m.desc));
     const saving = SAVING_WORDS.test(note);
     const kind: RowKind = direction === 'out' ? (saving ? 'saving' : 'expense') : saving ? 'skip' : 'income';
-    rows.push({ line: idx + 1, date, direction, kind, amount, note, category: direction === 'out' ? guessCategory(note, categories) : 'Other', fund: 'survival', sig: `${date}|${direction}|${amount}|${norm(note)}` });
+    rows.push({ line: idx + 1, date, direction, kind, amount, note, category: direction === 'out' ? guessCategory(note, categories, learned) : 'Other', fund: 'survival', sig: `${date}|${direction}|${amount}|${norm(note)}` });
   });
   return { rows, unreadable, outOfRange };
 }

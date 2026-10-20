@@ -119,13 +119,3 @@ export function spendByWeek(data: AppData, today: string, weeks: number) {
   }
   return out;
 }
-
-export function lastCategoryForNote(data: AppData, note: string): string | null {
-  const key = note.trim().toLowerCase();
-  if (!key) return null;
-  for (let i = data.money.txns.length - 1; i >= 0; i--) {
-    const t = data.money.txns[i];
-    if (t.kind === 'expense' && t.category && t.note.trim().toLowerCase() === key) return t.category;
-  }
-  return null;
-}

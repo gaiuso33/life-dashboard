@@ -6,6 +6,7 @@ import { resolvePrefs, setActivePrefs } from './units';
 import type { Prefs } from './units';
 import { stampChanges } from './scalars';
 import { categoriesOf } from './money';
+import { forgetCategory, learnedOf, renameCategory, teach } from './learn';
 import { linkedTxns } from './plan';
 import { LocalRepository } from './repository';
 import type { LoadResult, Repository } from './repository';
@@ -26,7 +27,9 @@ type Action =
   | { t: 'goal'; value: number | null }
   | { t: 'prefs'; value: Prefs }
   | { t: 'txn-add'; txn: Txn }
-  | { t: 'txn-import'; txns: Txn[] }
+  | { t: 'txn-import'; txns: Txn[]; /** Categories the person changed in the preview, which the app should remember. */ taught?: { note: string; category: string }[] }
+  | { t: 'learn-forget'; key: string }
+  | { t: 'learn-clear' }
   | { t: 'txn-del'; id: string }
   | { t: 'txn-cat'; id: string; category: string }
   | { t: 'money-set'; patch: Partial<MoneyData> }
@@ -62,7 +65,18 @@ function withSession(data: AppData, date: string, day: DayKey, fn: (s: Session) 
 
 const withGone = (s: AppData, ...ids: string[]): AppData => ({ ...s, gone: [...new Set([...s.gone, ...ids])] });
 
-/** Every change by the user stamps the data, so merging two devices knows which one is newer. Automatic actions do not. */
+/**
+ * Remembers the category chosen for each description. What the app already knew is read from `before` the change, so entries
+ * that are only being added (an imported row the person left alone) are not mistaken for choices. The first lesson turns what
+ * history showed into the saved list.
+ */
+function learnLesson(before: AppData, after: AppData, lessons: { note: string; category: string }[]): AppData {
+  const start = learnedOf(before);
+  let learned = start;
+  for (const l of lessons) learned = teach(learned, l.note, l.category);
+  return learned === start ? after : { ...after, money: { ...after.money, learned } };
+}
+
 export function reducer(state: AppData, a: Action): AppData {
   const next = apply(state, a);
   if (a.t === 'load' || a.t === 'badges-earn' || next === state) return next;
@@ -103,19 +117,34 @@ function apply(state: AppData, a: Action): AppData {
       return { ...state, goalWeight: a.value };
     case 'prefs':
       return { ...state, prefs: a.value };
-    case 'txn-add':
-      return { ...state, money: { ...state.money, txns: [...state.money.txns, a.txn] } };
+    case 'txn-add': {
+      const next = { ...state, money: { ...state.money, txns: [...state.money.txns, a.txn] } };
+      return a.txn.kind === 'expense' && a.txn.category ? learnLesson(state, next, [{ note: a.txn.note, category: a.txn.category }]) : next;
+    }
     case 'txn-import': {
       // Imported entries are added only if their id is new and hasn't been deleted, so importing twice is harmless.
       const have = new Set(state.money.txns.map((t) => t.id));
       const dead = new Set(state.gone);
       const fresh = a.txns.filter((t) => !have.has(t.id) && !dead.has(t.id));
-      return fresh.length === 0 ? state : { ...state, money: { ...state.money, txns: [...state.money.txns, ...fresh] } };
+      if (fresh.length === 0) return state;
+      const next = { ...state, money: { ...state.money, txns: [...state.money.txns, ...fresh] } };
+      return a.taught?.length ? learnLesson(state, next, a.taught) : next;
     }
     case 'txn-del':
       return { ...withGone(state, a.id), money: { ...state.money, txns: state.money.txns.filter((t) => t.id !== a.id) } };
-    case 'txn-cat':
-      return { ...state, money: { ...state.money, txns: state.money.txns.map((t) => (t.id === a.id ? { ...t, category: a.category } : t)) } };
+    case 'txn-cat': {
+      const was = state.money.txns.find((t) => t.id === a.id);
+      const next = { ...state, money: { ...state.money, txns: state.money.txns.map((t) => (t.id === a.id ? { ...t, category: a.category } : t)) } };
+      // Picking a different category for an entry is a lesson: the same description gets it next time.
+      return was && was.kind === 'expense' ? learnLesson(state, next, [{ note: was.note, category: a.category }]) : next;
+    }
+    case 'learn-forget': {
+      const rest = { ...learnedOf(state) };
+      delete rest[a.key];
+      return { ...state, money: { ...state.money, learned: rest } };
+    }
+    case 'learn-clear':
+      return { ...state, money: { ...state.money, learned: {} } };
     case 'money-set':
       return { ...state, money: { ...state.money, ...a.patch } };
     case 'career-set': {
@@ -168,6 +197,7 @@ function apply(state: AppData, a: Action): AppData {
           ...state.money,
           categories: cats.map((c) => (c === a.from ? a.to : c)),
           txns: state.money.txns.map((t) => (t.category === a.from ? { ...t, category: a.to } : t)),
+          learned: renameCategory(learnedOf(state), a.from, a.to),
         },
       };
     }
@@ -179,6 +209,7 @@ function apply(state: AppData, a: Action): AppData {
           ...state.money,
           categories: categoriesOf(state).filter((c) => c !== a.name),
           txns: state.money.txns.map((t) => (t.category === a.name ? { ...t, category: 'Other' } : t)),
+          learned: forgetCategory(learnedOf(state), a.name),
         },
       };
     }
@@ -202,11 +233,13 @@ function apply(state: AppData, a: Action): AppData {
       const have = new Set(state.money.txns.map((t) => t.id));
       const dead = new Set(state.gone);
       const fresh = a.txns.filter((t) => !have.has(t.id) && !dead.has(t.id));
-      return {
+      const next = {
         ...state,
         plans: state.plans.map((p) => (p.id !== a.id || p.doneOn.includes(a.date) ? p : { ...p, doneOn: [...p.doneOn, a.date] })),
         money: fresh.length ? { ...state.money, txns: [...state.money.txns, ...fresh] } : state.money,
       };
+      // A bill paid under a category teaches that category for the bill's name.
+      return learnLesson(state, next, fresh.filter((t) => t.kind === 'expense' && t.category).map((t) => ({ note: t.note, category: t.category as string })));
     }
     case 'setup':
       return buildSetup(state, a.answers);

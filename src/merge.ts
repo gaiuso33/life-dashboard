@@ -97,6 +97,7 @@ export function mergeData(local: AppData, incoming: AppData): AppData {
       ...n.money,
       dailyEstimate: n.money.dailyEstimate ?? o.money.dailyEstimate,
       categories: n.money.categories ?? o.money.categories,
+      learned: n.money.learned ?? o.money.learned,
       txns: unionById(o.money.txns, n.money.txns, dead).sort((a, b) => a.date.localeCompare(b.date)),
     },
     career: {

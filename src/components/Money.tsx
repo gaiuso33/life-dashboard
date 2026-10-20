@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { BarChart } from '../Charts';
 import type { Bar } from '../Charts';
+import { learnedCategory } from '../learn';
 import {categoriesOf,
   DAYS_PER_MONTH,
   HISTORY_NEEDED,
   compact,
   fundBalance,
-  lastCategoryForNote,
   monthTotals,
   monthlySavingPace,
   newId,
@@ -157,7 +157,7 @@ export function Money() {
                     onChange={(e) => setNote(e.target.value)}
                     onBlur={() => {
                       if (kind !== 'expense') return;
-                      const known = lastCategoryForNote(data, note);
+                      const known = learnedCategory(data, note);
                       if (known) setCategory(known);
                     }}
                   />
