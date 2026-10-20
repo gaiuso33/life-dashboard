@@ -3,6 +3,8 @@ import { backtestWeight, predictAt, savingPaces, shipPaces, weightConfidence, we
 import type { Confidence } from './projection';
 import {monthlySavingPace, survivalTarget, fundBalance, DAYS_PER_MONTH} from './money';
 import { goalForecast } from './career';
+import { ONE_OFF_WORD, backtestSaving, savingEstimate } from './saving';
+import type { OneOff } from './saving';
 import type { AppData } from './types';
 import { addDays, dayNumber, fmtShort, mondayOf, round1 } from './utils';
 import { fmtMoney, fmtWeight, toDisplayExact, weightUnit } from './units';
@@ -99,23 +101,65 @@ const monthYear = (key: string) => {
 };
 const monthsRange = (a: number, b: number) => (Math.round(a) === Math.round(b) ? monthsWord(a) : `${Math.max(1, Math.round(a))} to ${Math.round(b)} months`);
 
+const oneOffText = (list: OneOff[]) => {
+  const shown = list.slice(0, 3).map((o) => `a one-off ${ONE_OFF_WORD[o.kind]} of ${fmtMoney(o.amount)} on ${fmtShort(o.date)}`);
+  return `${shown.join(', ')}${list.length > 3 ? ` and ${list.length - 3} more` : ''}`;
+};
+
 export function fundForecast(data: AppData, today: string): Forecast {
   const title = 'Survival fund';
   const target = survivalTarget(data, today).target;
   if (target == null) return { id: 'fund', title, headline: 'No target yet', detail: 'Enter a rough spend per day on the Money screen, or log about four weeks of spending.', tone: 'info' };
   const balance = fundBalance(data, 'survival');
   if (balance >= target) return { id: 'fund', title, headline: 'Complete', detail: `${fmtMoney(balance)} covers six months of spending. New savings go to the investment fund.`, tone: 'good' };
-  const paces = savingPaces(data, today);
-  const typical = monthlySavingPace(data, today);
-  if (typical <= 0 && paces.typical <= 0) return { id: 'fund', title, headline: 'No savings in the last 8 weeks', detail: `${fmtMoney(balance)} of ${fmtMoney(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
 
+  // With three whole months of history the estimate is made from months of income, spending and savings; before that, from recent weeks.
+  const est = savingEstimate(data, today);
+  const paces = savingPaces(data, today);
+  const typicalRecent = monthlySavingPace(data, today);
   const need = target - balance;
-  const mid = need / (typical > 0 ? typical : paces.typical);
-  const quick = paces.fast > 0 ? need / paces.fast : mid;
-  const slowM = paces.slow > 0 ? need / paces.slow : Infinity;
+  let rates: { typical: number; slow: number; fast: number };
+  let confidence: Confidence;
+  let basis: string;
+  let extra = '';
+  let trackRecord: string | undefined;
+  if (est) {
+    if (est.typical <= 0) {
+      if (est.leftOver != null && est.leftOver > 0) {
+        const m = need / est.leftOver;
+        return {
+          id: 'fund',
+          title,
+          headline: `Nothing set aside yet: ${monthsWord(m)} if you saved what is left over`,
+          detail: `${fmtMoney(balance)} of ${fmtMoney(target)}. You have not moved money into the fund in the last ${est.months} full months, but after spending you keep about ${fmtMoney(est.leftOver)} a month. That is only a what-if: it happens only if you actually set it aside.`,
+          tone: 'info',
+          confidence: 'low',
+        };
+      }
+      return { id: 'fund', title, headline: `No savings in the last ${est.months} full months`, detail: `${fmtMoney(balance)} of ${fmtMoney(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
+    }
+    rates = { typical: est.typical, slow: est.slow, fast: est.fast };
+    confidence = est.confidence;
+    basis = `saving about ${fmtMoney(est.typical)} a month over the last ${est.months} full months`;
+    if (est.oneOffs.length) extra += ` Left out ${oneOffText(est.oneOffs)}, because ${est.oneOffs.length === 1 ? 'it looks' : 'they look'} like ${est.oneOffs.length === 1 ? 'a one-off' : 'one-offs'} and not your normal month.`;
+    if (est.lumpy >= 0.5) extra += ' Your income arrives in big, uneven lumps, so the range is wider.';
+    if (est.leftOver != null && est.leftOver > est.typical * 1.25 && est.leftOver - est.typical > 0) extra += ` After spending you keep about ${fmtMoney(est.leftOver)} a month, more than you have been putting away.`;
+    const bt = backtestSaving(data, today);
+    if (bt) trackRecord = `Replaying your history, forecasts like this missed the next two months by about ${fmtMoney(bt.mae)} a month on average (${bt.n} checked), and ${Math.round(bt.inside * 100)}% of the time the real pace landed inside the range.`;
+  } else {
+    if (typicalRecent <= 0 && paces.typical <= 0) return { id: 'fund', title, headline: 'No savings in the last 8 weeks', detail: `${fmtMoney(balance)} of ${fmtMoney(target)} so far. Log a transfer and an estimate appears.`, tone: 'warn' };
+    const typical = typicalRecent > 0 ? typicalRecent : paces.typical;
+    rates = { typical, slow: paces.slow, fast: Math.max(paces.fast, typicalRecent) };
+    confidence = paces.confidence;
+    basis = `saving about ${fmtMoney(typical)} a month over the last 8 weeks`;
+    extra = paces.confidence === 'low' ? ' Only a few weeks of history, so treat the range as a rough guide.' : ` Range from ${paces.windows} four-week stretches.`;
+  }
+
+  const mid = need / rates.typical;
+  const quick = rates.fast > 0 ? need / rates.fast : mid;
+  const slowM = rates.slow > 0 ? need / rates.slow : Infinity;
   const when = addDays(today, Math.round(mid * DAYS_PER_MONTH));
   const range = slowM === Infinity ? `Some recent stretches had no savings, so it could be quicker or much slower.` : `It could take ${monthsRange(quick, slowM)}, depending on whether the next weeks look like your quickest or your slowest recent stretches.`;
-  const stretches = paces.confidence === 'low' ? 'Only a few weeks of history, so treat the range as a rough guide.' : `Range from ${paces.windows} four-week stretches.`;
 
   const monthX = (m: number) => dayNumber(today) + m * DAYS_PER_MONTH;
   const horizon = Math.min(60, Math.max(3, Math.ceil(Math.min(slowM === Infinity ? mid * 2 : slowM, mid * 2.5))));
@@ -123,9 +167,9 @@ export function fundForecast(data: AppData, today: string): Forecast {
   const chart: FanChartData = {
     unit: 'money',
     history: [{ x: monthX(0), y: balance }],
-    mid: line(typical > 0 ? typical : paces.typical),
-    low: line(Math.max(0, paces.slow)),
-    high: line(Math.max(paces.fast, typical)),
+    mid: line(rates.typical),
+    low: line(Math.max(0, rates.slow)),
+    high: line(rates.fast),
     goal: target,
     xLabel: (x) => monthYear(addDays('1970-01-01', Math.round(x))).replace(/^(\w{3})\w* /, '$1 '),
   };
@@ -133,9 +177,10 @@ export function fundForecast(data: AppData, today: string): Forecast {
     id: 'fund',
     title,
     headline: `${monthsWord(mid)} to go (around ${monthYear(when)})`,
-    detail: `${fmtMoney(balance)} of ${fmtMoney(target)}, saving about ${fmtMoney(typical > 0 ? typical : paces.typical)} a month over the last 8 weeks. ${range} ${stretches} Irregular income means this will move around.`,
+    detail: `${fmtMoney(balance)} of ${fmtMoney(target)}, ${basis}. ${range}${extra} Irregular income means this will move around.`,
     tone: mid > 36 ? 'warn' : 'info',
-    confidence: paces.confidence,
+    confidence,
+    trackRecord,
     chart,
   };
 }

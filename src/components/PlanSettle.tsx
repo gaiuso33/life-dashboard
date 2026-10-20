@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { activeFundOf, categoriesOf, lastCategoryForNote, suggestedSave } from '../money';
+import { learnedCategory } from '../learn';
+import { activeFundOf, categoriesOf, suggestedSave } from '../money';
 import { freshLinkBase, linkedTxns, payTxns } from '../plan';
 import type { Occurrence } from '../plan';
 import { useStore } from '../store';
@@ -23,7 +24,7 @@ export function PayForm({ occ, onClose }: { occ: Occurrence; onClose: () => void
   const item = occ.item;
   const isBill = item.kind === 'bill';
   const cats = categoriesOf(data);
-  const guess = lastCategoryForNote(data, item.title);
+  const guess = learnedCategory(data, item.title);
   const [amount, setAmount] = useState(String(item.amount));
   const [category, setCategory] = useState(guess && cats.includes(guess) ? guess : cats.includes('Other') ? 'Other' : cats[0]);
   // The day it was due, unless that is still ahead: nothing can be recorded in the future.

@@ -482,6 +482,7 @@ select:hover { border-color: var(--steel-3); }
 .cat-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
 .cat-list input { min-width: 0; width: 100%; }
 .cat-list small { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.learned-key { min-width: 0; overflow-wrap: anywhere; }
 .item-list { display: grid; gap: 8px; }
 .item-list li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .item-list li > input:first-child { flex: 1 1 100%; min-width: 0; }

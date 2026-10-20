@@ -45,6 +45,7 @@ export interface MoneyData {
   dailyEstimate: number | null; // rough daily spend, used until a month of data exists
   survivalOpening: number; // already in the survival fund before tracking began
   categories?: string[]; // spending categories; the built-in list when absent
+  learned?: Record<string, string>; // description -> category the person chose for it; read from history until first used
 }
 
 export const emptyMoney = (): MoneyData => ({ txns: [], savePct: 20, dailyEstimate: null, survivalOpening: 0 });

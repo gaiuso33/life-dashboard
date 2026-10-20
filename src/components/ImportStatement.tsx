@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {categoriesOf} from '../money';
+import { learnedOf, merchantKey } from '../learn';
+import { categoriesOf } from '../money';
 import { buildRows, detectDateOrder, findHeaderRow, guessMapping, mappingProblem, NONE, parseCsv, planImport } from '../statement';
 import type { DateOrder, ImportRow, Mapping, RowKind } from '../statement';
 import { useStore } from '../store';
@@ -16,6 +17,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
   const { data, dispatch } = useStore();
   const today = todayKey();
   const categories = categoriesOf(data);
+  const learned = useMemo(() => learnedOf(data), [data]);
   const [step, setStep] = useState<Step>('pick');
   const [error, setError] = useState('');
   const [paste, setPaste] = useState('');
@@ -25,6 +27,8 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
   const [order, setOrder] = useState<DateOrder>('dmy');
   const [certain, setCertain] = useState(true);
   const [rows, setRows] = useState<ImportRow[]>([]);
+  // What each row was before the person touched it, to tell their choices from the app's guesses.
+  const [guessed, setGuessed] = useState<string[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [added, setAdded] = useState<{ n: number; from: string; to: string } | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -60,7 +64,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
   };
 
   const problem = map ? mappingProblem(map) : null;
-  const built = useMemo(() => (map && !problem ? buildRows(table, map, order, categories, today, headers.length) : null), [table, map, order, categories, today, headers.length, problem]);
+  const built = useMemo(() => (map && !problem ? buildRows(table, map, order, categories, today, headers.length, learned) : null), [table, map, order, categories, today, headers.length, problem, learned]);
 
   const existing = useMemo(() => new Set(data.money.txns.map((t) => t.id)), [data.money.txns]);
   const gone = useMemo(() => new Set(data.gone), [data.gone]);
@@ -78,6 +82,13 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
 
   const set = (patch: Partial<Mapping>) => setMap((m) => (m ? { ...m, ...patch } : m));
   const edit = (i: number, patch: Partial<ImportRow>) => setRows((rs) => rs.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  // Changing a place's category also changes the other rows for that place that still hold the app's guess, so a repeat shop is fixed once.
+  const recategorise = (i: number, category: string) =>
+    setRows((rs) => {
+      const key = merchantKey(rs[i].note);
+      const before = rs[i].category;
+      return rs.map((r, k) => (k === i ? { ...r, category } : key && r.kind === 'expense' && r.category === before && r.category === guessed[k] && merchantKey(r.note) === key ? { ...r, category } : r));
+    });
 
   const colOptions = (allowNone: boolean) => (
     <>
@@ -211,6 +222,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                 disabled={!built || built.rows.length === 0}
                 onClick={() => {
                   setRows(built!.rows);
+                  setGuessed(built!.rows.map((r) => r.category));
                   setShowAll(false);
                   setStep('review');
                 }}
@@ -265,7 +277,7 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                       </td>
                       <td role="cell">
                         {r.kind === 'expense' ? (
-                          <select value={r.category} aria-label={`Category for ${r.note || 'entry'} on ${r.date}`} onChange={(e) => edit(i, { category: e.target.value })}>
+                          <select value={r.category} aria-label={`Category for ${r.note || 'entry'} on ${r.date}`} onChange={(e) => recategorise(i, e.target.value)}>
                             {categories.map((c) => <option key={c}>{c}</option>)}
                           </select>
                         ) : (
@@ -288,7 +300,9 @@ export function ImportStatement({ onClose }: { onClose: () => void }) {
                 className="btn primary"
                 disabled={plan.add.length === 0}
                 onClick={() => {
-                  dispatch({ t: 'txn-import', txns: plan.add });
+                  // Rows whose category the person changed in the preview are remembered for next time.
+                  const taught = rows.flatMap((r, k) => (r.kind === 'expense' && r.category !== guessed[k] ? [{ note: r.note, category: r.category }] : []));
+                  dispatch({ t: 'txn-import', txns: plan.add, taught });
                   setAdded({ n: plan.add.length, from: range?.from ?? '', to: range?.to ?? '' });
                   setStep('done');
                 }}

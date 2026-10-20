@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { learnedOf } from '../learn';
 import {CATEGORIES, PROTECTED_CATEGORIES, categoriesOf, newId} from '../money';
 import type { Tab } from '../nav';
 import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../program';
@@ -360,6 +361,7 @@ export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => v
         <Reminders onSync={onSync} />
         <Programme />
         <Categories />
+        <LearnedCategories />
         <Rewards />
         <Goals key={weightUnit()} go={go} />
         <DataSection onSync={onSync} />
@@ -543,6 +545,55 @@ function Categories() {
       </form>
       {taken && clean && <p className="err">You already have that category.</p>}
       <p className="note">Category names you add stay on this device. The advisor only sees the built-in names, and groups your own into one total.</p>
+    </section>
+  );
+}
+
+function LearnedCategories() {
+  const { data, dispatch } = useStore();
+  const cats = categoriesOf(data);
+  // Newest first, so what the person just taught is at the top.
+  const entries = useMemo(() => Object.entries(learnedOf(data)).reverse(), [data]);
+  const [all, setAll] = useState(false);
+  const SHOWN = 12;
+  const shown = all ? entries : entries.slice(0, SHOWN);
+  return (
+    <section className="panel" aria-labelledby="learned-title">
+      <h2 id="learned-title">Categories the app has learned</h2>
+      <p className="note first">When you choose a category for a place or description, the app uses it for the same place next time, including in statement imports. The built-in word guesses are only used for places it has not learned.</p>
+      {entries.length === 0 ? (
+        <p className="note">Nothing yet. Log some spending or change a category and it appears here.</p>
+      ) : (
+        <>
+          <ul className="cat-list learned-list">
+            {shown.map(([key, category]) => (
+              <li key={key}>
+                <span className="learned-key">{key}</span>
+                <small>{cats.includes(category) ? category : `${category} (removed)`}</small>
+                <button className="btn ghost" aria-label={`Forget ${key}`} onClick={() => dispatch({ t: 'learn-forget', key })}>
+                  Forget
+                </button>
+              </li>
+            ))}
+          </ul>
+          {entries.length > SHOWN && !all && (
+            <button className="btn ghost" onClick={() => setAll(true)}>
+              Show all {entries.length}
+            </button>
+          )}
+          <div className="row-action">
+            <button
+              className="btn"
+              onClick={() => {
+                if (window.confirm(`Forget all ${entries.length} learned ${entries.length === 1 ? 'place' : 'places'}? Your past entries keep their categories.`)) dispatch({ t: 'learn-clear' });
+              }}
+            >
+              Forget everything
+            </button>
+          </div>
+        </>
+      )}
+      <p className="note">Kept on your devices and synced between them like your other settings. The advisor never sees it.</p>
     </section>
   );
 }
