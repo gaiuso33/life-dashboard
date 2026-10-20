@@ -201,9 +201,33 @@ export function sameSecret(a: string, b: string): boolean {
   return x.length === y.length && x.length > 0 && timingSafeEqual(x, y);
 }
 
+/** Longest the function waits on any one outside call, so a stuck service can't hold the whole run until Vercel kills it. */
+export const TIMEOUT_MS = 8000;
+
+/**
+ * A device is saved by the person's own phone, so its address could be anything. The server only sends to https addresses on
+ * a real public host (every push service is one): never a bare name, a numeric address, "localhost", a private network name,
+ * or an address with a login in it.
+ */
+export function safeEndpoint(raw: unknown): boolean {
+  if (typeof raw !== 'string' || raw.length > 2000) return false;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:' || u.username || u.password || (u.port && u.port !== '443')) return false;
+  const h = u.hostname.toLowerCase();
+  if (!/^[a-z0-9.-]+$/.test(h) || !h.includes('.') || h.startsWith('.') || h.endsWith('.')) return false;
+  if (/^\d+(\.\d+){3}$/.test(h)) return false;
+  return !/(^|\.)(localhost|local|internal|localdomain|lan|home|corp|intranet)$/.test(h);
+}
+
 async function rest(path: string, init: RequestInit = {}): Promise<Response> {
   const key = env('SUPABASE_SERVICE_ROLE_KEY');
   return fetch(`${supabaseUrl()}/rest/v1${path}`, {
+    signal: AbortSignal.timeout(TIMEOUT_MS),
     ...init,
     headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', ...(init.headers as Record<string, string>) },
   });
@@ -213,8 +237,10 @@ async function makeSender(): Promise<(row: SubRow, p: Payload) => Promise<SendRe
   const { default: webpush } = await import('web-push');
   webpush.setVapidDetails(env('VAPID_SUBJECT') || 'mailto:admin@example.com', env('VITE_VAPID_PUBLIC_KEY') || env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
   return async (row, p) => {
+    // An address that fails the check is never contacted; the device is treated as gone so it gets cleaned up.
+    if (!safeEndpoint(row.endpoint)) return 'gone';
     try {
-      await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, JSON.stringify(p), { TTL: 3600, urgency: 'normal' });
+      await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, JSON.stringify(p), { TTL: 3600, urgency: 'normal', timeout: TIMEOUT_MS });
       return 'ok';
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
@@ -244,7 +270,7 @@ async function tick(): Promise<TickResult & { devices: number }> {
 
 /** Sends a test to the signed-in person's own devices. The session token is checked with Supabase, not trusted. */
 async function test(token: string): Promise<{ sent: number; devices: number }> {
-  const who = await fetch(`${supabaseUrl()}/auth/v1/user`, { headers: { apikey: env('VITE_SUPABASE_ANON_KEY') || env('SUPABASE_ANON_KEY') || env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${token}` } });
+  const who = await fetch(`${supabaseUrl()}/auth/v1/user`, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { apikey: env('VITE_SUPABASE_ANON_KEY') || env('SUPABASE_ANON_KEY') || env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${token}` } });
   if (!who.ok) throw Object.assign(new Error('Please sign in again.'), { status: 401 });
   const me = (await who.json()) as { id?: string; app_metadata?: Record<string, unknown> };
   const id = me.id;
@@ -259,6 +285,7 @@ async function test(token: string): Promise<{ sent: number; devices: number }> {
   // Counted before sending. If recording it fails the test still goes (the limit is a courtesy, not a gate worth breaking).
   await fetch(`${supabaseUrl()}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
     method: 'PUT',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: { apikey: env('SUPABASE_SERVICE_ROLE_KEY'), Authorization: `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ app_metadata: { ...meta, push_tests: [...limit.recent, now] } }),
   }).catch(() => undefined);
