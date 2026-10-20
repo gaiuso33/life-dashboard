@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { learnedOf } from '../learn';
+import { idbStore } from '../photos';
 import {CATEGORIES, PROTECTED_CATEGORIES, categoriesOf, newId} from '../money';
 import type { Tab } from '../nav';
 import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../program';
@@ -795,7 +796,10 @@ function DataSection({ onSync }: { onSync: () => void }) {
         <button
           className="btn"
           onClick={() => {
-            if (window.confirm('Erase everything on this device and start empty? Download a copy first if you might want it back.')) dispatch({ t: 'fresh' });
+            if (window.confirm('Erase everything on this device, including progress photos, and start empty? Download a copy first if you might want it back.')) {
+              dispatch({ t: 'fresh' });
+              void idbStore().clear().catch(() => undefined);
+            }
           }}
         >
           Erase everything on this device

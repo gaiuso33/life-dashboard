@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { describeGains, mergeData } from '../merge';
-import { agoText, canShareFile, daysAgo, downloadData, lastExport, parseImport, shareData } from '../sync';
+import { agoText, canShareFile, daysAgo, downloadData, fileTooLargeText, lastExport, MAX_IMPORT_BYTES, parseImport, photosFitInCopy, shareData } from '../sync';
+import { MAX_PHOTOS, idbStore, importPhotos, photoErrorText } from '../photos';
+import type { Photo } from '../photos';
 import { useStore } from '../store';
 import type { AppData } from '../types';
 import { Account } from './Account';
@@ -8,6 +10,12 @@ import { Account } from './Account';
 export function Sync({ onClose }: { onClose: () => void }) {
   const { data, importData } = useStore();
   const [incoming, setIncoming] = useState<AppData | null>(null);
+  const store = useMemo(() => idbStore(), []);
+  // Photos carried by a chosen file, and how many of them this device does not have yet.
+  const [incomingPhotos, setIncomingPhotos] = useState<Photo[]>([]);
+  const [newPhotos, setNewPhotos] = useState(0);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [withPhotos, setWithPhotos] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -21,6 +29,10 @@ export function Sync({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  useEffect(() => {
+    store.list().then((l) => setPhotoCount(l.length), () => setPhotoCount(0));
+  }, [store]);
+
   const merged = useMemo(() => (incoming ? mergeData(data, incoming) : null), [data, incoming]);
   const gains = useMemo(() => (merged ? describeGains(data, merged) : []), [data, merged]);
   const mixed = incoming != null && incoming.sample !== data.sample;
@@ -30,16 +42,51 @@ export function Sync({ onClose }: { onClose: () => void }) {
     setError('');
     setDone('');
     setIncoming(null);
+    setIncomingPhotos([]);
     if (!file) return;
-    if (file.size > 20_000_000) return setError('That file is too large to be a dashboard export.');
+    if (file.size > MAX_IMPORT_BYTES) return setError(fileTooLargeText);
     const res = parseImport(await file.text());
     if (!res.ok) return setError(res.error);
+    const have = new Set(await store.list().then((l) => l.map((p) => p.id), () => []));
     setName(file.name);
+    setIncomingPhotos(res.photos);
+    setNewPhotos(res.photos.filter((p) => !have.has(p.id)).length);
     setIncoming(res.data);
   };
 
-  const doExport = () => {
-    downloadData(data);
+  /** Photos from the chosen file are added to this device's; none are ever removed by an import. */
+  const bringInPhotos = async (): Promise<string> => {
+    if (!newPhotos) return '';
+    try {
+      const r = await importPhotos(store, incomingPhotos);
+      setPhotoCount((n) => n + r.added);
+      return r.skipped > r.added || r.added < newPhotos ? ` ${r.added} of ${newPhotos} new photos were added (this device keeps at most ${MAX_PHOTOS}).` : ` ${r.added} photo${r.added === 1 ? '' : 's'} added.`;
+    } catch (e) {
+      return ` The photos could not be saved: ${photoErrorText(e)}`;
+    }
+  };
+
+  // Photos go into the copy only when the box is ticked, and only if the file would still be small enough to open again.
+  const photosForCopy = async (): Promise<Photo[] | undefined | null> => {
+    if (!withPhotos || photoCount === 0) return undefined;
+    try {
+      const all = await store.all();
+      if (!photosFitInCopy(all)) {
+        setError('Your photos are too big to fit in one copy. Save the copy without photos, or delete some photos first.');
+        return null;
+      }
+      return all;
+    } catch (e) {
+      setError(photoErrorText(e));
+      return null;
+    }
+  };
+
+  const doExport = async () => {
+    setError('');
+    const photos = await photosForCopy();
+    if (photos === null) return;
+    downloadData(data, photos);
     setExported(lastExport());
   };
 
@@ -63,20 +110,29 @@ export function Sync({ onClose }: { onClose: () => void }) {
           Last saved: {agoText(daysAgo(exported))}. {data.sample ? 'This is sample data.' : ''}
         </p>
         <div className="row-action">
-          <button className="btn primary" onClick={doExport}>
+          <button className="btn primary" onClick={() => void doExport()}>
             Download copy
           </button>
           {canShare && (
             <button
               className="btn"
               onClick={async () => {
-                if (await shareData(data)) setExported(lastExport());
+                setError('');
+                const photos = await photosForCopy();
+                if (photos === null) return;
+                if (await shareData(data, photos)) setExported(lastExport());
               }}
             >
               Share to another app
             </button>
           )}
         </div>
+        {photoCount > 0 && (
+          <label className="check">
+            <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos(e.target.checked)} />
+            <span>Include my {photoCount} progress photo{photoCount === 1 ? '' : 's'} (the file will be much bigger)</span>
+          </label>
+        )}
         <p className="note">Send it to yourself on WhatsApp, Telegram or email, or save it to a cloud drive. It doesn’t include your Claude API key.</p>
 
         <h4>2. Bring in a copy from another device</h4>
@@ -103,13 +159,15 @@ export function Sync({ onClose }: { onClose: () => void }) {
             ) : (
               <p className="note first">Nothing new in this file. This device already has all of it.</p>
             )}
+            {incomingPhotos.length > 0 && <p className="note">The file also has {incomingPhotos.length} progress photo{incomingPhotos.length === 1 ? '' : 's'}; {newPhotos} {newPhotos === 1 ? 'is' : 'are'} new to this device. Photos are only ever added, never removed.</p>}
             <div className="row-action">
               <button
                 className="btn primary"
                 disabled={mixed && !data.sample}
-                onClick={() => {
+                onClick={async () => {
                   importData(merged);
-                  setDone(`Merged. ${gains.length ? 'This device now has everything from both.' : 'Nothing changed.'}`);
+                  const photoNote = await bringInPhotos();
+                  setDone(`Merged. ${gains.length ? 'This device now has everything from both.' : 'Nothing changed.'}${photoNote}`);
                   setIncoming(null);
                 }}
               >
@@ -117,10 +175,11 @@ export function Sync({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 className="btn"
-                onClick={() => {
-                  if (window.confirm('Replace everything on this device with this file? Anything only on this device is lost.')) {
+                onClick={async () => {
+                  if (window.confirm('Replace everything on this device with this file? Anything only on this device is lost. Photos already on this device are kept.')) {
                     importData(incoming);
-                    setDone('Replaced. This device now matches the file.');
+                    const photoNote = await bringInPhotos();
+                    setDone(`Replaced. This device now matches the file.${photoNote}`);
                     setIncoming(null);
                   }
                 }}

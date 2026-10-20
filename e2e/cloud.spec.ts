@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { CLOUD_APP, DESKTOP, expectNoA11yViolations, MOCK, setUpEmptyDashboard, stored, newContext } from './helpers';
+import path from 'path';
+import { CLOUD_APP, DESKTOP, expectNoA11yViolations, MOCK, setUpEmptyDashboard, stored, storedPhotos, newContext } from './helpers';
 
 // Cloud sync against the local mock of Supabase (e2e/mock-server.mjs). The tests share two "devices" and run in order.
 test.describe.configure({ mode: 'serial' });
@@ -139,6 +140,37 @@ test('edits travel in both directions and concurrent edits converge', async () =
       { timeout: 45_000, intervals: [1000, 1500, 2000] },
     )
     .toBe(true);
+});
+
+test('a progress photo stays on the device it was taken on: not in the cloud copy, not in any request, not on the other device', async () => {
+  const sent: { url: string; size: number }[] = [];
+  L.page.on('request', (r) => sent.push({ url: r.url(), size: (r.postData() ?? '').length }));
+  await L.page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  const panel = L.page.locator('section[aria-labelledby="photos-title"]');
+  await panel.getByLabel('Choose a picture from this device').setInputFiles(path.join(import.meta.dirname, 'fixtures', 'photo-front.jpg'));
+  await expect(panel.getByRole('status')).toContainText('Photo saved on this device');
+  const [kept] = await storedPhotos(L.page);
+  expect(kept.full.length, 'the picture is a real size, so leaking it would show').toBeGreaterThan(10_000);
+
+  // make the laptop upload again, by changing something
+  const before = (await admin()).vaults[0];
+  await L.page.getByRole('button', { name: 'Today', exact: true }).first().click();
+  await L.page.getByRole('button', { name: '4', exact: true }).first().click();
+  await expect.poll(async () => (await admin()).vaults[0].version, { timeout: 30_000 }).toBeGreaterThan(before.version);
+  const after = (await admin()).vaults[0];
+  expect(Math.abs(after.blob.length - before.blob.length), 'the cloud copy did not grow by a picture').toBeLessThan(kept.full.length / 4);
+  expect(JSON.stringify(await admin())).not.toContain('/9j/');
+  expect(Math.max(...sent.map((r) => r.size)), 'no request was as big as the picture').toBeLessThan(kept.full.length / 2);
+  expect(sent.some((r) => r.url.includes(MOCK) && r.size > 0), 'the upload did happen, so the check above means something').toBe(true);
+
+  // the phone gets the data but never the photo
+  await P.page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect.poll(() => energyDays(P.page, 4), { timeout: 30_000 }).toBe(true);
+  expect(await storedPhotos(P.page)).toEqual([]);
+  await P.page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await expect(P.page.locator('section[aria-labelledby="photos-title"]').getByText('No photos yet')).toBeVisible();
+  await P.page.getByRole('button', { name: 'Today', exact: true }).first().click();
+  await L.page.getByRole('button', { name: 'Today', exact: true }).first().click();
 });
 
 test('a device can stay unlocked; one that did not opt in asks again', async () => {
