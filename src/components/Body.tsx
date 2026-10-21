@@ -3,6 +3,7 @@ import { BarChart, LineChart } from '../Charts';
 import type { Bar, Series } from '../Charts';
 import { suggestedGoal, suggestedPace, weeklyRepTotals, weightTrend } from '../derive';
 import { MEASURES } from '../program';
+import { Photos } from './Photos';
 import { useStore } from '../store';
 import type { MeasureKey } from '../types';
 import { dayNumber, fmtShort, round1, todayKey } from '../utils';
@@ -186,6 +187,8 @@ export function Body() {
           <p className="empty">Two weigh-ins are enough to draw the line.</p>
         )}
       </section>
+
+      <Photos />
 
       <section className="panel">
         <h2>Total reps per week</h2>

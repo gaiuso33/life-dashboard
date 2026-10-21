@@ -5,7 +5,8 @@ import { buildSampleData } from '../sample';
 import { defaultAnswers, setupErrors } from '../setup';
 import type { SetupAnswers } from '../setup';
 import { useStore } from '../store';
-import { parseImport } from '../sync';
+import { idbStore, importPhotos } from '../photos';
+import { MAX_IMPORT_BYTES, fileTooLargeText, parseImport } from '../sync';
 import { defaultItemsFor } from '../localize';
 import { addDays, todayKey } from '../utils';
 import { RegionUnits } from './RegionUnits';
@@ -52,9 +53,12 @@ export function Welcome() {
   const pickFile = async (file: File | undefined) => {
     setImportError('');
     if (!file) return;
+    if (file.size > MAX_IMPORT_BYTES) return setImportError(fileTooLargeText);
     const res = parseImport(await file.text());
     if (!res.ok) return setImportError(res.error);
     importData(res.data);
+    // A copy made with photos in it brings them along; one made without simply has none.
+    if (res.photos.length) await importPhotos(idbStore(), res.photos).catch(() => undefined);
   };
 
   if (step === -1) {

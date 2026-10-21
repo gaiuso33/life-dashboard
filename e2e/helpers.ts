@@ -53,3 +53,51 @@ export async function setUpEmptyDashboard(page: Page): Promise<void> {
 
 export const stored = (page: Page, key = 'life-dashboard:v1') => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), key);
 export const TABS = ['Today', 'Month', 'Train', 'Money', 'Career', 'Rewards', 'Advisor', 'Body'] as const;
+
+export interface StoredPhoto {
+  id: string;
+  date: string;
+  note: string;
+  thumb: string;
+  full: string;
+}
+/** Everything in this browser's photo storage, big pictures included. */
+export const storedPhotos = (page: Page): Promise<StoredPhoto[]> =>
+  page.evaluate(
+    () =>
+      new Promise<StoredPhoto[]>((resolve, reject) => {
+        const open = indexedDB.open('life-dashboard-photos', 1);
+        open.onupgradeneeded = () => {
+          open.result.createObjectStore('meta', { keyPath: 'id' });
+          open.result.createObjectStore('full', { keyPath: 'id' });
+        };
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction(['meta', 'full'], 'readonly');
+          const metas = tx.objectStore('meta').getAll();
+          const fulls = tx.objectStore('full').getAll();
+          tx.oncomplete = () => {
+            db.close();
+            const at = new Map((fulls.result as { id: string; full: string }[]).map((f) => [f.id, f.full]));
+            resolve((metas.result as Omit<StoredPhoto, 'full'>[]).map((m) => ({ ...m, full: at.get(m.id) ?? '' })));
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+/** Width and height a picture (as a data address) actually has, and whether its bytes still contain the given text (for hidden camera details). */
+export const inspectPicture = (page: Page, dataUrl: string, needles: string[]) =>
+  page.evaluate(
+    async ([url, words]) => {
+      const dims = await new Promise<[number, number]>((res, rej) => {
+        const i = new Image();
+        i.onload = () => res([i.naturalWidth, i.naturalHeight]);
+        i.onerror = () => rej(new Error('not a picture'));
+        i.src = url;
+      });
+      const bytes = atob(url.split(',')[1]);
+      return { w: dims[0], h: dims[1], contains: words.filter((w) => bytes.includes(w)) };
+    },
+    [dataUrl, needles] as const,
+  );

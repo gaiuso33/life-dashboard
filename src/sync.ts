@@ -1,3 +1,5 @@
+import { photosFromFile } from './photos';
+import type { Photo } from './photos';
 import { normalize, isAppData } from './repository';
 import type { AppData } from './types';
 import { todayKey } from './utils';
@@ -20,11 +22,15 @@ const markExported = () => {
   }
 };
 
-/** Data only: the Claude API key lives in its own slot and is never part of this file. */
-const fileFor = (data: AppData) => new File([JSON.stringify(data, null, 2)], `life-dashboard-${todayKey()}.json`, { type: 'application/json' });
+/**
+ * Data only: the Claude API key lives in its own slot and is never part of this file. Progress photos are in it only when the
+ * caller passes them, which the screen does only after the person ticks the box.
+ */
+const fileFor = (data: AppData, photos?: Photo[]) =>
+  new File([JSON.stringify(photos?.length ? { ...data, photos } : data, null, photos?.length ? undefined : 2)], `life-dashboard-${todayKey()}.json`, { type: 'application/json' });
 
-export function downloadData(data: AppData): void {
-  const f = fileFor(data);
+export function downloadData(data: AppData, photos?: Photo[]): void {
+  const f = fileFor(data, photos);
   const url = URL.createObjectURL(f);
   const a = document.createElement('a');
   a.href = url;
@@ -43,9 +49,9 @@ export const canShareFile = (data: AppData): boolean => {
 };
 
 /** Opens the phone's share sheet with the file attached. Returns false if the person cancelled. */
-export async function shareData(data: AppData): Promise<boolean> {
+export async function shareData(data: AppData, photos?: Photo[]): Promise<boolean> {
   try {
-    await navigator.share({ files: [fileFor(data)], title: 'Life Dashboard data' });
+    await navigator.share({ files: [fileFor(data, photos)], title: 'Life Dashboard data' });
     markExported();
     return true;
   } catch {
@@ -53,7 +59,15 @@ export async function shareData(data: AppData): Promise<boolean> {
   }
 }
 
-export type ParsedImport = { ok: true; data: AppData } | { ok: false; error: string };
+/** The largest export file the app will open. A copy with photos in it is far bigger than one without. */
+export const MAX_IMPORT_BYTES = 120_000_000;
+export const fileTooLargeText = 'That file is too large to be a dashboard export.';
+
+/** True when a copy with these photos in it would be small enough for this app to open again. Checked before saving one. */
+export const photosFitInCopy = (photos: Photo[]): boolean => photos.reduce((n, p) => n + p.full.length + p.thumb.length + 200, 0) <= MAX_IMPORT_BYTES - 5_000_000;
+
+/** `photos` are the progress photos the file carries, already checked. They are never part of `data`. */
+export type ParsedImport = { ok: true; data: AppData; photos: Photo[] } | { ok: false; error: string };
 
 export function parseImport(text: string): ParsedImport {
   let raw: unknown;
@@ -63,7 +77,7 @@ export function parseImport(text: string): ParsedImport {
     return { ok: false, error: 'That file isn’t a Life Dashboard export. It should be a .json file saved from this app.' };
   }
   if (!isAppData(raw)) return { ok: false, error: 'That file isn’t a Life Dashboard export. It should be a .json file saved from this app.' };
-  return { ok: true, data: normalize(raw) };
+  return { ok: true, data: normalize(raw), photos: photosFromFile(raw) };
 }
 
 export const daysAgo = (iso: string | null | undefined): number | null => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)) : null);

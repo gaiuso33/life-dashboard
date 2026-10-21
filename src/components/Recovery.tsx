@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { downloadText, parseImport } from '../sync';
+import { idbStore, importPhotos } from '../photos';
+import { MAX_IMPORT_BYTES, downloadText, fileTooLargeText, parseImport } from '../sync';
 import { emptyData } from '../types';
 import { todayKey } from '../utils';
 
@@ -34,9 +35,12 @@ export function Recovery() {
                 const f = e.target.files?.[0];
                 e.target.value = '';
                 if (!f) return;
+                if (f.size > MAX_IMPORT_BYTES) return setError(fileTooLargeText);
                 const res = parseImport(await f.text());
-                if (res.ok) resolveRecovery(res.data);
-                else setError(res.error);
+                if (res.ok) {
+                  resolveRecovery(res.data);
+                  if (res.photos.length) await importPhotos(idbStore(), res.photos).catch(() => undefined);
+                } else setError(res.error);
               }}
             />
           </label>
