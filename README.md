@@ -2,20 +2,21 @@
 
 Product spec and current status. Live at https://life-dashboard-neon-ten.vercel.app (demo with made-up data: `/demo`).
 
-## Current status (21 October 2026)
+## Current status (22 October 2026)
 
 **Built and in daily use by one person:** daily plates and habits; training (push, pull, legs, mobility) with a progression flag; weekly body measurements and on-device progress photos; money (quick logger, CSV statement import, bills and income that feed Money, an income split into the survival fund, categories the app learns, savings forecasts that cope with irregular income); career (GitHub commits, a five-project tracker, learning log); rewards and badges; the Month calendar; an AI advisor (offline coach, or Claude, OpenAI, Gemini or OpenRouter with your own key); real push reminders; accounts with end-to-end encrypted cloud sync, plus file export and import; an installable app that offers its own updates; demo mode.
 
-**Still to do for the personal version** ([milestone v1.0](https://github.com/gaiuso33/life-dashboard/milestone/1)), all of it checking on real devices and services rather than building:
-- [#13](https://github.com/gaiuso33/life-dashboard/issues/13) push delivery on real phones. A test notification arrives on the owner's phone and the times on screen match the server; reliable scheduled reminders over several days, and iPhone, are what is being checked.
-- [#14](https://github.com/gaiuso33/life-dashboard/issues/14) real-device checklist (install, keyboard, file picker, calendar file).
-- [#15](https://github.com/gaiuso33/life-dashboard/issues/15) a pass with a real screen reader.
-- [#16](https://github.com/gaiuso33/life-dashboard/issues/16) two-device sync against the real Supabase project.
-- [#23](https://github.com/gaiuso33/life-dashboard/issues/23) this README.
+**Checked on real devices and services** ([milestone v1.0](https://github.com/gaiuso33/life-dashboard/milestone/1), all done by the owner, October 2026):
+- [#13](https://github.com/gaiuso33/life-dashboard/issues/13) push delivery: a real scheduled reminder arrives with the app closed on Android (Chrome) and on iPhone (from the Home Screen); tapping it opens the app; changing a reminder time or the phone's time zone moves the next one; turning push off, signing out and deleting the account each stop it; two devices on one account stay independent; the scheduler and function logs show a successful run every minute.
+- [#14](https://github.com/gaiuso33/life-dashboard/issues/14) real-device checklist: installing (Android prompt, iPhone Add to Home Screen), the on-screen keyboard, importing a CSV from the Files app, the calendar file, rotating the phone, working offline, and Safari keeping its storage after a week unused.
+- [#15](https://github.com/gaiuso33/life-dashboard/issues/15) screen readers: VoiceOver (iPhone) and TalkBack (Android) on Today, Train, Money and Settings → Reminders; charts have text alternatives; dialogs trap and return focus; status messages are announced.
+- [#16](https://github.com/gaiuso33/life-dashboard/issues/16) two-device sync against the real Supabase project, including the encrypted-only copy, password reset, staying unlocked and deleting the account.
+
+The one item left in v1.0 is [#23](https://github.com/gaiuso33/life-dashboard/issues/23), this README.
 
 **Later:** [v1.x improvements](https://github.com/gaiuso33/life-dashboard/milestone/2) (event-based notifications, per-reminder days and quiet hours, GitHub private repositories, training loads that follow the weight unit, more languages) and the [v2.0 pitch version](https://github.com/gaiuso33/life-dashboard/milestone/3) (security review for many users, privacy policy and onboarding for other people, own email sender, a push sender that scales, analytics, forecasts learned across people).
 
-Sections marked **(built)** are in the app. Each "Not done" line below was checked against the code on this date.
+Sections marked **(built)** are in the app. Each "Not done" line below was checked against the code on 21 October 2026.
 
 ## 1. Vision
 A dark, data-heavy personal dashboard that turns daily check-ins into visible progress across **fitness, money and career**, rewards consistency, and uses an AI advisor and forecasts to keep you on track. Built for one user first (you), structured so it can be pitched later as a general self-improvement product.
@@ -114,7 +115,7 @@ Kept separately, never in that object: each AI provider's key (its own slot), wh
 
 ## 7. Open items
 - GitHub sync reads public commits on default branches only, for the last 90 days. Private repositories and other branches don't appear, so the Today screen keeps a manual "mark done" for coding days.
-- Push notifications are built (section 26). A test arrives on the owner's phone; steady delivery of scheduled reminders over days, and iPhone, are still being checked ([#13](https://github.com/gaiuso33/life-dashboard/issues/13)).
+- Push notifications are built (section 26) and have been checked on Android and iPhone ([#13](https://github.com/gaiuso33/life-dashboard/issues/13)).
 - Private repositories and other branches are tracked in [#26](https://github.com/gaiuso33/life-dashboard/issues/26).
 
 ## 8. Advisor (built)
@@ -158,11 +159,11 @@ Kept separately, never in that object: each AI provider's key (its own slot), wh
 - **Storage problems**: a warning banner appears if the browser refuses to save (storage full or blocked), with a one-tap download of a copy. It clears once saving works again.
 - **Several tabs**: changes from another tab are merged in via the storage event.
 - **Crashes**: an error boundary around each screen keeps the rest of the app usable; an app-level boundary offers Download my data and Restore the last backup.
-- **Accessibility**: automated axe-core audit (WCAG 2 A/AA) is clean on every screen at desktop and phone width. Not yet checked with a real screen reader ([#15](https://github.com/gaiuso33/life-dashboard/issues/15)).
+- **Accessibility**: automated axe-core audit (WCAG 2 A/AA) is clean on every screen at desktop and phone width. Checked by hand with VoiceOver (iPhone) and TalkBack (Android) on Today, Train, Money and Settings → Reminders ([#15](https://github.com/gaiuso33/life-dashboard/issues/15)); other screens have only the automated audit.
 - **Security headers**: `vercel.json` sets a CSP (inline scripts are still allowed because the build is a single inlined file), nosniff, no-referrer and a restrictive Permissions-Policy.
 - **Tests**: see section 16. GitHub Actions (Node 22) runs the dependency audit, both typechecks, the unit tests, the build and the browser tests on every push and pull request.
 - **Dependencies**: `npm audit` reports 0 vulnerabilities (checked 18 Oct 2026, after moving to Vite 6 and Vitest 5). Before that, the 9 findings were all in dev tools (the dev server and test runner, never shipped to the app); the code that runs in people's browsers and on the server (`react`, `react-dom`, `web-push`) was clean. CI now fails if a shipped dependency gets a known vulnerability. Node 22.12 or newer is required (`engines` in `package.json`).
-- **Not done**: real-device testing (section 24; [#13](https://github.com/gaiuso33/life-dashboard/issues/13), [#14](https://github.com/gaiuso33/life-dashboard/issues/14)) and a security review for many users ([#31](https://github.com/gaiuso33/life-dashboard/issues/31)).
+- **Not done**: a security review for many users ([#31](https://github.com/gaiuso33/life-dashboard/issues/31)).
 
 ## 14. Accounts and cloud sync (built, needs a Supabase project)
 **What it does.** Sign in on any device and the dashboard keeps itself in step: edits go up a few seconds after you stop, other devices are checked when you return to the app, go back online, and every minute while it is open. The file export/import still works and is the fallback.
@@ -179,7 +180,7 @@ Kept separately, never in that object: each AI provider's key (its own slot), wh
 5. In Vercel → Project → Settings → Environment Variables add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then redeploy. Locally, copy `.env.example` to `.env.local`.
 Without those two values the app works exactly as before and the cloud section says it is switched off.
 
-**Limits to know.** Whole-dashboard sync (one row, up to 20 MB). Progress photos are not part of it. The two-device behaviour has been tested against a local mock of Supabase, not yet the real project ([#16](https://github.com/gaiuso33/life-dashboard/issues/16)). Email confirmation uses Supabase's built-in mailer, which is rate-limited; use your own SMTP before real users. Deleting the account is in the app (section 21; it needs one extra SQL block in Supabase). The session is kept in this browser's storage, as with most web apps; the content security policy limits what scripts can run.
+**Limits to know.** Whole-dashboard sync (one row, up to 20 MB). Progress photos are not part of it. The two-device behaviour is tested automatically against a local mock of Supabase and has been checked by hand against the real project ([#16](https://github.com/gaiuso33/life-dashboard/issues/16)). Email confirmation uses Supabase's built-in mailer, which is rate-limited; use your own SMTP before real users. Deleting the account is in the app (section 21; it needs one extra SQL block in Supabase). The session is kept in this browser's storage, as with most web apps; the content security policy limits what scripts can run.
 
 ## 15. Demo mode (built)
 Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` (or with `?demo`), to show it on made-up data. On Vercel this is a rewrite in `vercel.json`, with `/demo/` redirecting to `/demo`; any other host needs the same rule, or use `?demo`. It runs in memory only: nothing is saved, nothing is uploaded, sign-in and the Claude key are switched off, and the visitor's own data on that device is never touched. Reloading resets it. A short guided tour (eight steps: Today, Month, Train, Money, Career, Rewards, Advisor, privacy) walks through the areas; "Start my own" leaves the demo for the real first-run welcome. Use `/demo?tour=0` (or `?demo&tour=0`) to skip the tour when someone is driving it live. The sample data is dated relative to today, so it always looks current.
@@ -188,7 +189,7 @@ Open the app at its own link, `https://life-dashboard-neon-ten.vercel.app/demo` 
 - `npm test`: 339 unit tests: the statement importer, reminders, push scheduling and its on-screen preview, the push function itself, forecasting and units, merge, plan, advisor, setup, resilience (including a corruption fuzz), cloud crypto, learned categories, savings forecasts and progress photos.
 - `npm run e2e`: builds the app twice (normal, and wired to a local mock of Supabase) and runs 91 browser tests in Chromium via Playwright: first-run setup, settings, month, file export/import merge, advisor, damaged data recovery, storage-full warning, crash isolation, two tabs, demo mode and its tour, statement import, the push notification controls in Settings, new versions reaching an installed app, bills and income recorded in Money, progress photos (shrinking, compare, delete, copies with and without them, refusals, nothing sent), cloud sync between two devices (sign-up, wrong passphrase, concurrent edits, offline, token refresh, password reset), the production security headers, and an automated accessibility audit (WCAG 2 A/AA) of every screen at desktop and phone width. Tests run on a fixed clock (Friday 9 Oct 2026, Lagos time) so dates never drift. Locally set `PW_CHROMIUM_PATH` if Chromium is already installed; otherwise run `npx playwright install chromium` once.
 - CI runs, on every push and pull request: the audit of shipped dependencies (`npm audit --omit=dev`), the typecheck of the app and of the browser tests, the unit tests and the build; the browser tests are a separate job (the report is kept when it fails).
-- Not covered by automated tests: real phones, screen readers, the real Supabase service, and the live AI providers (they are tested with fakes). The owner has tried Claude, OpenAI and Gemini by hand.
+- Not covered by automated tests, but checked by hand by the owner: real phones (section 24), screen readers, the real Supabase project, and the live AI providers (the tests use fakes; Claude, OpenAI and Gemini work, OpenRouter has not been tried).
 
 ## 17. AI providers (built)
 The advisor can use Anthropic (Claude), OpenAI, Google Gemini, or OpenRouter, which gives one key access to hundreds of models from many makers (Llama, Mistral, DeepSeek, Grok and others). Pick the provider in the Advisor screen, paste that provider's own API key, and type any model name it offers. Each provider keeps its own key (in its own slot on the device, never in the dashboard data, the export or the cloud copy) and its own last-used model, so switching back and forth loses nothing. The same numbers-only summary is sent whichever provider is chosen, and "Show exactly what gets sent" shows it.
@@ -240,7 +241,7 @@ The Advisor's "Where you're heading" now shows how sure each estimate is, not ju
 
 `e2e/mobile.spec.ts` runs with touch at 320×568 (smallest common phone), 390×844 and 844×390 (on its side): every screen has no sideways scroll, the bottom bar buttons are all on screen, no text box is under 16px (iPhones zoom the page when such a box is focused), and a statement can be imported with taps from start to finish. It also simulates the browser's install offer (the Install button appears, asks the browser to install, then reads "Already installed") and checks that an iPhone is told to use Safari's Add to Home Screen.
 
-**What this cannot prove** (it is Chromium pretending to be a phone): the real keyboard, the phone's file picker, the real install prompt, Safari's own behaviour, and how the calendar file opens on a given phone. Check these on a real phone once: install it, set reminders and open the downloaded calendar file, import a CSV from the Files app, and rotate the phone.
+**What this cannot prove** (it is Chromium pretending to be a phone): the real keyboard, the phone's file picker, the real install prompt, Safari's own behaviour, and how the calendar file opens on a given phone. These were checked by hand on an Android phone and an iPhone ([#14](https://github.com/gaiuso33/life-dashboard/issues/14)): installing, the keyboard, the calendar file, importing a CSV from the Files app, rotating the phone and working offline. Repeat them after a big change to those areas.
 
 ## 25. Currency and weight follow where you are (built)
 
@@ -294,7 +295,7 @@ The first-run setup suggests a **currency** and a **weight unit** (kg or lb) fro
 - **Rotating `CRON_SECRET`:** (1) set a new long random value in Vercel and redeploy; (2) in the Supabase SQL editor run `select cron.unschedule('life-dashboard-push');` and then the `cron.schedule` block from `supabase/push.sql` again with the new value. Between steps 1 and 2 the clock gets `401`s and no reminders go out, so do both in one sitting. Nothing in the app or on any phone changes.
 - **Rotating the VAPID keys:** only do this if the private key leaks. Generate a new pair (`npx web-push generate-vapid-keys`), set `VITE_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` in Vercel and redeploy. **Every saved device stops working**, because each subscription is tied to the key it was made with. Each device then has to open Settings -> Reminders and turn push off and on again; the old rows are removed automatically when the push service reports them dead. Rotating `SUPABASE_SERVICE_ROLE_KEY` only needs the new value in Vercel and a redeploy.
 
-**Verified so far.** On the owner's phone "Send a test" arrives, and "Check what the server has" shows the same times as the screen. **Not verified:** steady delivery of scheduled reminders over several days, other phones and browsers, and iPhone ([#13](https://github.com/gaiuso33/life-dashboard/issues/13)); a headless browser cannot create a real push subscription, so no automated test covers actual delivery.
+**Verified by hand ([#13](https://github.com/gaiuso33/life-dashboard/issues/13)).** On Android (Chrome) and iPhone (Home Screen) a test and a real scheduled reminder arrive with the app closed, tapping one opens the app, and the next reminder follows a changed time or time zone. Turning push off, signing out and deleting the account each stop it, two devices on one account are independent, and the Supabase scheduler and Vercel logs show a run every minute. **Not covered by an automated test:** actual delivery (a headless browser cannot create a real push subscription), and phones and browsers other than the ones tried.
 - Only the four reminders exist; there are no event-based notifications (for example "streak at risk", [#24](https://github.com/gaiuso33/life-dashboard/issues/24)), and no per-reminder days, quiet hours or snooze ([#25](https://github.com/gaiuso33/life-dashboard/issues/25)).
 - A device that has not opened the app since its time zone changed keeps the old zone until it does.
 
