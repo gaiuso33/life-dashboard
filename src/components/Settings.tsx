@@ -12,8 +12,8 @@ import { useCloud } from '../cloud/CloudProvider';
 import { currentSubscription, deviceZone, markPushOn, pushSupport, pushWanted, refreshPush, rowFrom, showLocalTest, subscribeThisDevice } from '../push';
 import { describeDevices, nextForRow } from '../pushPreview';
 import type { DeviceView } from '../pushPreview';
-import { buildIcs, downloadIcs, loadReminders, saveReminders } from '../reminders';
-import type { ReminderPlan } from '../reminders';
+import { DEFAULT_QUIET, anyReminderOn, buildIcs, downloadIcs, loadReminders, reminderDays, saveReminders, usualDays } from '../reminders';
+import type { Reminder, ReminderId, ReminderPlan } from '../reminders';
 import { useStore } from '../store';
 import type { RewardItem, Tier } from '../types';
 import { todayKey } from '../utils';
@@ -26,7 +26,7 @@ const TIERS: Tier[] = ['week', 'biweek', 'month', 'landmark'];
 const digits = (s: string) => s.replace(/[^\d]/g, '');
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
 
-const REMINDER_ROWS: { key: keyof ReminderPlan; label: string; hint: string }[] = [
+const REMINDER_ROWS: { key: ReminderId; label: string; hint: string }[] = [
   { key: 'checkin', label: 'Daily check-in', hint: 'Every day' },
   { key: 'training', label: 'Training day', hint: 'On your programme’s gym days' },
   { key: 'money', label: 'Log spending', hint: 'Every day' },
@@ -176,7 +176,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
             </div>
           ) : (
             <div className="row-action">
-              <button className="btn primary" disabled={busy || !Object.values(plan).some((p) => p.on)} onClick={() => void enable()}>
+              <button className="btn primary" disabled={busy || !anyReminderOn(plan)} onClick={() => void enable()}>
                 Turn on for this device
               </button>
               <span className="muted-s">Each device is turned on separately.</span>
@@ -207,6 +207,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
                       The server could not reach this device (first failed {d.unreachable}). It keeps trying. If this stays, turn push off and on again on that device.
                     </p>
                   )}
+                  {d.quiet && <p className="note">Quiet hours: nothing is sent from {d.quiet.replace(' to ', ' until ')} (this device’s clock).</p>}
                   {d.items.length === 0 ? (
                     <p className="note">No reminders are switched on for this device.</p>
                   ) : (
@@ -218,6 +219,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
                           </span>
                           <small className="muted-s">
                             Next: {i.next}
+                            {i.snoozedUntil ? ` · snoozed until ${i.snoozedUntil}` : ''}
                             {i.lastSent ? ` · last sent ${i.lastSent}` : ''}
                           </small>
                         </li>
@@ -252,16 +254,39 @@ function Reminders({ onSync }: { onSync: () => void }) {
   const program = getProgram();
   const now = new Date();
   const [made, setMade] = useState(false);
-  const set = (k: keyof ReminderPlan, p: Partial<ReminderPlan[typeof k]>) => {
-    const next = { ...plan, [k]: { ...plan[k], ...p } };
+  const save = (next: ReminderPlan) => {
     setPlan(next);
     saveReminders(next);
     setMade(false);
   };
+  const set = (k: ReminderId, p: Partial<Reminder>) => save({ ...plan, [k]: { ...plan[k], ...p } });
+  const quiet = plan.quiet ?? DEFAULT_QUIET;
+  const setQuiet = (p: Partial<typeof quiet>) => save({ ...plan, quiet: { ...quiet, ...p } });
+  // Which weekdays a reminder is on, shown as seven buttons. Choosing exactly the usual days goes back to following them.
+  const shownDays = (k: ReminderId): number[] => {
+    const d = reminderDays(plan, k, program);
+    return d.length ? d : [0, 1, 2, 3, 4, 5, 6];
+  };
+  const toggleDay = (k: ReminderId, day: number) => {
+    const cur = shownDays(k);
+    const next = cur.includes(day) ? cur.filter((x) => x !== day) : [...cur, day];
+    if (!next.length) return; // a reminder needs at least one day; switch it off instead
+    const sorted = [...next].sort((a, b) => a - b);
+    const usual = usualDays(k, program);
+    const isUsual = JSON.stringify(sorted) === JSON.stringify(usual.length ? usual : [0, 1, 2, 3, 4, 5, 6]);
+    const { days: _old, ...rest } = plan[k];
+    void _old;
+    save({ ...plan, [k]: isUsual ? rest : { ...rest, days: sorted } });
+  };
+  const resetDays = (k: ReminderId) => {
+    const { days: _old, ...rest } = plan[k];
+    void _old;
+    save({ ...plan, [k]: rest });
+  };
   return (
     <section className="panel" id="reminders">
       <h2>Reminders</h2>
-      <p className="note first">Pick what you want to be reminded of and the time for each. Then choose how: push notifications, a calendar file, or both.</p>
+      <p className="note first">Pick what you want to be reminded of, the days and the time for each. Then choose how: push notifications, a calendar file, or both.</p>
       <ul className="rows">
         {REMINDER_ROWS.map((r) => (
           <li key={r.key} className="row rem-row">
@@ -270,7 +295,7 @@ function Reminders({ onSync }: { onSync: () => void }) {
               <span>
                 <b>{r.label}</b>{' '}
                 <small className="muted-s">
-                  {r.hint}
+                  {plan[r.key].days?.length ? 'Your chosen days' : r.hint}
                   {(() => {
                     const next = nextForRow(r.key, plan, program, deviceZone(), now);
                     return next ? ` · Next: ${next}` : '';
@@ -281,16 +306,51 @@ function Reminders({ onSync }: { onSync: () => void }) {
             <div className="row-action">
               <input type="time" aria-label={`${r.label} time`} value={plan[r.key].time} disabled={!plan[r.key].on} onChange={(e) => e.target.value && set(r.key, { time: e.target.value })} />
             </div>
+            {plan[r.key].on && (
+              <div className="day-chips" role="group" aria-label={`${r.label} days`}>
+                {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                  const on = shownDays(r.key).includes(d);
+                  return (
+                    <button key={d} type="button" className="day-chip" aria-pressed={on} aria-label={WEEKDAYS_LONG[d]} disabled={on && shownDays(r.key).length === 1} onClick={() => toggleDay(r.key, d)}>
+                      {WEEKDAYS_LONG[d][0]}
+                    </button>
+                  );
+                })}
+                {plan[r.key].days?.length ? (
+                  <button type="button" className="link-btn" onClick={() => resetDays(r.key)}>
+                    Back to the usual days
+                  </button>
+                ) : null}
+              </div>
+            )}
           </li>
         ))}
+        <li className="row rem-row">
+          <label className="check">
+            <input type="checkbox" checked={quiet.on} onChange={(e) => setQuiet({ on: e.target.checked })} />
+            <span>
+              <b>Quiet hours</b> <small className="muted-s">Nothing is sent in this window</small>
+            </span>
+          </label>
+          <div className="row-action quiet-times">
+            <input type="time" aria-label="Quiet hours from" value={quiet.from} disabled={!quiet.on} onChange={(e) => e.target.value && setQuiet({ from: e.target.value })} />
+            <span aria-hidden="true">to</span>
+            <input type="time" aria-label="Quiet hours until" value={quiet.to} disabled={!quiet.on} onChange={(e) => e.target.value && setQuiet({ to: e.target.value })} />
+          </div>
+        </li>
       </ul>
+      {quiet.on && (
+        <p className="note">
+          A reminder whose time falls inside quiet hours is skipped, in push notifications and in the calendar file. A snoozed one waits until quiet hours end. Each push notification has a “Snooze 1 hour” button.
+        </p>
+      )}
       <PushNotifications plan={plan} onSync={onSync} />
       <h3>Calendar file</h3>
       <p className="note first">Your phone’s calendar does the reminding, even when this app is closed, and nothing is sent anywhere.</p>
       <div className="row-action">
         <button
           className="btn primary"
-          disabled={!Object.values(plan).some((p) => p.on)}
+          disabled={!anyReminderOn(plan)}
           onClick={() => {
             downloadIcs(buildIcs(plan, getProgram(), todayKey()));
             setMade(true);
@@ -301,7 +361,7 @@ function Reminders({ onSync }: { onSync: () => void }) {
       </div>
       {made && (
         <p className="note" role="status">
-          Open the downloaded file. On iPhone choose Add All; on Android it opens in Google Calendar. Changing the times later? Download again, and delete the old “Life Dashboard” events first so they don’t double up. Using push notifications as well? Pick one or the other, or you will be reminded twice.
+          Open the downloaded file. On iPhone choose Add All; on Android it opens in Google Calendar. Changing the days or times later? Download again, and delete the old “Life Dashboard” events first so they don’t double up. Using push notifications as well? Pick one or the other, or you will be reminded twice. Your calendar app has its own snooze on each alert.
         </p>
       )}
     </section>

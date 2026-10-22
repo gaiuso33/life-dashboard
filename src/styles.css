@@ -570,11 +570,17 @@ table.mini tr.dim td { color: var(--muted); }
 .rem-row .check { color: var(--chalk); font-size: 15px; align-items: center; }
 .rem-row .check > span { display: grid; }
 .rem-row input[type='time'] { min-height: 40px; }
+.rem-row .day-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.day-chip { width: 36px; height: 36px; border-radius: 50%; background: transparent; border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.day-chip[aria-pressed='true'] { background: var(--chalk); border-color: var(--chalk); color: var(--ink); font-weight: 600; }
+.day-chip:disabled { opacity: .7; cursor: default; }
+.quiet-times { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 @media (max-width: 560px) {
   .guide .row { grid-template-columns: 22px 1fr; }
   .guide .row-action { grid-column: 2; }
   .rem-row { grid-template-columns: 1fr auto; }
   .rem-row .row-action { grid-column: auto; }
+  .rem-row .day-chips { grid-column: 1 / -1; }
 }
 .forecasts .fc-conf { justify-self: start; font-size: 12px; letter-spacing: .02em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .forecasts .fc-conf.conf-high { color: var(--plate-green); border-color: var(--plate-green); }

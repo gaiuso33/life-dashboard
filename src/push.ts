@@ -1,8 +1,8 @@
 import { isDemo } from './demo';
 import { isStandalone } from './install';
 import type { DayDef } from './program';
-import { loadReminders } from './reminders';
-import type { ReminderPlan } from './reminders';
+import { REMINDER_IDS, loadReminders, reminderDays } from './reminders';
+import type { ReminderId, ReminderPlan } from './reminders';
 
 // True push notifications: the phone is woken by the browser's own push service, so reminders arrive with the app closed.
 // The server (see api/push.ts) is told only the push address, the time zone, and the reminder times and wording.
@@ -15,16 +15,26 @@ export interface PushItem {
   days: number[];
   title: string;
   body: string;
+  /** Only present while quiet hours are on: nothing is sent between `from` and `to` on this device's clock. */
+  quiet?: { from: string; to: string };
 }
 
-/** What the server is given for one device: only the switched-on reminders. */
+/** What the server is given for one device: only the switched-on reminders, on the days chosen, with the quiet window if any. */
 export function buildPushSchedule(plan: ReminderPlan, program: DayDef[]): PushItem[] {
+  const text: Record<ReminderId, { title: string; body: string }> = {
+    checkin: { title: 'Time to check in', body: 'Tick your plates and rate your energy for today.' },
+    training: { title: 'Training day', body: 'Open your programme and log your sets.' },
+    money: { title: 'Log today’s spending', body: 'Add anything you spent or received today.' },
+    review: { title: 'Weekly review', body: 'Look back at the week, then set up the next one.' },
+  };
+  const quiet = plan.quiet?.on && plan.quiet.from !== plan.quiet.to ? { from: plan.quiet.from, to: plan.quiet.to } : null;
   const out: PushItem[] = [];
-  if (plan.checkin.on) out.push({ id: 'checkin', time: plan.checkin.time, days: [], title: 'Time to check in', body: 'Tick your plates and rate your energy for today.' });
-  if (plan.training.on && program.length)
-    out.push({ id: 'training', time: plan.training.time, days: [...new Set(program.map((d) => d.weekday))].sort(), title: 'Training day', body: 'Open your programme and log your sets.' });
-  if (plan.money.on) out.push({ id: 'money', time: plan.money.time, days: [], title: 'Log today’s spending', body: 'Add anything you spent or received today.' });
-  if (plan.review.on) out.push({ id: 'review', time: plan.review.time, days: [0], title: 'Weekly review', body: 'Look back at the week, then set up the next one.' });
+  for (const id of REMINDER_IDS) {
+    if (!plan[id].on || (id === 'training' && !program.length)) continue;
+    const item: PushItem = { id, time: plan[id].time, days: reminderDays(plan, id, program), ...text[id] };
+    if (quiet) item.quiet = { ...quiet };
+    out.push(item);
+  }
   return out;
 }
 
