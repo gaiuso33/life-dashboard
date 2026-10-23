@@ -3,7 +3,7 @@
 //
 // BUILD is replaced with a different value on every build (see vite.config.ts). That matters: a browser only installs a new
 // service worker when this file's bytes change, so without it an update to the app alone would never be noticed.
-const BUILD = 'mvjstx57';
+const BUILD = 'mvkqyrpm';
 const CACHE = `life-dashboard-shell-${BUILD}`;
 const SHELL = ['./', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const INDEX = new URL('./', self.registration.scope).href;
