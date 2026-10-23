@@ -8,7 +8,7 @@
 // It never touches the encrypted vault. All it knows is what the `push_subscriptions` table holds: a push address, a time
 // zone, and the reminder times and wording.
 
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export interface ReminderItem {
   id: string;
@@ -18,6 +18,8 @@ export interface ReminderItem {
   days: number[];
   title: string;
   body: string;
+  /** Nothing is sent while the device's clock is inside this window (it may run past midnight). */
+  quiet?: { from: string; to: string };
 }
 
 export interface SubRow {
@@ -42,6 +44,11 @@ export const WINDOW_MINUTES = 15;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 /** Key inside `last_sent` that holds when a device first could not be reached. Reminder ids cannot look like this. */
 export const FAIL_KEY = '_fail';
+/** Prefix of the keys in `last_sent` that hold when a snoozed reminder should come back. Reminder ids cannot look like this. */
+export const SNOOZE_PREFIX = '_snooze:';
+export const SNOOZE_MINUTES = 60;
+/** A snooze that could not be delivered (the phone was off, or it was waiting out quiet hours) is dropped after this long. */
+export const SNOOZE_EXPIRY_MINUTES = 12 * 60;
 /** "Send a test" is limited per person so a stuck button or a script cannot spam their phones. */
 export const TEST_LIMIT = 5;
 export const TEST_WINDOW_MS = 60 * 60_000;
@@ -77,6 +84,17 @@ export function localParts(now: Date, tz: string): { date: string; weekday: numb
   }
 }
 
+/** Whether a time of day (minutes since midnight) is inside a quiet window. The end is the first minute allowed again. */
+export function inQuiet(minutes: number, from: string, to: string): boolean {
+  const f = TIME.exec(from);
+  const t = TIME.exec(to);
+  if (!f || !t) return false;
+  const a = Number(f[1]) * 60 + Number(f[2]);
+  const b = Number(t[1]) * 60 + Number(t[2]);
+  if (a === b) return false;
+  return a < b ? minutes >= a && minutes < b : minutes >= a || minutes < b;
+}
+
 const asObject = (x: unknown): Record<string, unknown> => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : {});
 
 /** Reads the stored schedule defensively: anything malformed is skipped rather than trusted. */
@@ -89,17 +107,29 @@ export function cleanSchedule(raw: unknown): ReminderItem[] {
     if (typeof o.time !== 'string' || !TIME.test(o.time)) continue;
     if (typeof o.title !== 'string' || typeof o.body !== 'string') continue;
     const days = Array.isArray(o.days) ? [...new Set(o.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
-    out.push({ id: o.id, time: o.time, days, title: o.title.slice(0, 80), body: o.body.slice(0, 160) });
+    const item: ReminderItem = { id: o.id, time: o.time, days, title: o.title.slice(0, 80), body: o.body.slice(0, 160) };
+    const q = asObject(o.quiet);
+    if (typeof q.from === 'string' && TIME.test(q.from) && typeof q.to === 'string' && TIME.test(q.to) && q.from !== q.to) item.quiet = { from: q.from, to: q.to };
+    out.push(item);
   }
   return out;
 }
 
-/** Which reminders should go out right now for one device, given what it has already been sent today. */
-export function dueReminders(schedule: unknown, lastSent: unknown, tz: string, now: Date): ReminderItem[] {
+/** A reminder that is due, and whether it is a snoozed one coming back rather than its usual time. */
+export type Due = ReminderItem & { snoozed?: true };
+
+/**
+ * Which reminders should go out right now for one device, given what it has already been sent today.
+ * Nothing goes out while the device's clock is inside the quiet window. A snoozed reminder comes back once its time has
+ * passed, waiting out quiet hours if they are in the way, and is dropped if it still could not be delivered after twelve hours.
+ */
+export function dueReminders(schedule: unknown, lastSent: unknown, tz: string, now: Date): Due[] {
   const local = localParts(now, tz);
   if (!local) return [];
   const sent = asObject(lastSent);
-  return cleanSchedule(schedule).filter((r) => {
+  const items = cleanSchedule(schedule);
+  const due: Due[] = items.filter((r) => {
+    if (r.quiet && inQuiet(local.minutes, r.quiet.from, r.quiet.to)) return false;
     const [h, m] = r.time.split(':').map(Number);
     const late = local.minutes - (h * 60 + m);
     // A reminder set very close to midnight and delayed past it is skipped, which is better than sending it a day late.
@@ -107,6 +137,29 @@ export function dueReminders(schedule: unknown, lastSent: unknown, tz: string, n
     if (r.days.length && !r.days.includes(local.weekday)) return false;
     return sent[r.id] !== local.date;
   });
+  for (const r of items) {
+    if (due.some((d) => d.id === r.id)) continue;
+    const at = typeof sent[SNOOZE_PREFIX + r.id] === 'string' ? Date.parse(sent[SNOOZE_PREFIX + r.id] as string) : NaN;
+    if (Number.isNaN(at)) continue;
+    const overdue = (now.getTime() - at) / 60_000;
+    if (overdue < 0 || overdue >= SNOOZE_EXPIRY_MINUTES) continue;
+    if (r.quiet && inQuiet(local.minutes, r.quiet.from, r.quiet.to)) continue;
+    due.push({ ...r, snoozed: true });
+  }
+  return due;
+}
+
+/** The proof, carried inside each reminder, that lets the phone ask for it to be snoozed without signing in. */
+export function snoozeSignature(secret: string, endpoint: string, id: string): string {
+  return createHmac('sha256', secret).update(`snooze|${endpoint}|${id}`).digest('hex');
+}
+
+/** Records a snooze in a device's `last_sent` map, and returns the new map (or null if the reminder is not on that device). */
+export function withSnooze(schedule: unknown, lastSent: unknown, id: string, now: Date): Record<string, string> | null {
+  if (!cleanSchedule(schedule).some((r) => r.id === id)) return null;
+  const next = { ...asObject(lastSent) } as Record<string, string>;
+  next[SNOOZE_PREFIX + id] = new Date(now.getTime() + SNOOZE_MINUTES * 60_000).toISOString();
+  return next;
 }
 
 export interface TickResult {
@@ -139,7 +192,9 @@ export async function runTick(rows: SubRow[], now: Date, send: (row: SubRow, p: 
       for (const r of due) {
         const out = await send(row, { title: r.title, body: r.body, tag: r.id }).catch((): SendResult => 'retry');
         if (out === 'ok') {
-          sent[r.id] = local.date;
+          // A snoozed reminder comes back once and is then done; a usual one is marked as sent for today (and ends any snooze).
+          if (!r.snoozed) sent[r.id] = local.date;
+          delete sent[SNOOZE_PREFIX + r.id];
           changed = true;
           res.sent++;
           okHere++;
@@ -164,7 +219,8 @@ export async function runTick(rows: SubRow[], now: Date, send: (row: SubRow, p: 
       }
       if (changed) {
         // Forget entries for reminders that no longer exist so the map doesn't grow.
-        const keep = new Set([FAIL_KEY, ...cleanSchedule(row.schedule).map((r) => r.id)]);
+        const ids = cleanSchedule(row.schedule).map((r) => r.id);
+        const keep = new Set([FAIL_KEY, ...ids, ...ids.map((id) => SNOOZE_PREFIX + id)]);
         for (const k of Object.keys(sent)) if (!keep.has(k)) delete sent[k];
         res.updates.push({ endpoint: row.endpoint, last_sent: sent });
       }
@@ -179,6 +235,7 @@ export async function runTick(rows: SubRow[], now: Date, send: (row: SubRow, p: 
 interface Req {
   method?: string;
   headers: Record<string, string | string[] | undefined>;
+  body?: unknown;
 }
 interface Res {
   status(code: number): Res;
@@ -240,7 +297,10 @@ async function makeSender(): Promise<(row: SubRow, p: Payload) => Promise<SendRe
     // An address that fails the check is never contacted; the device is treated as gone so it gets cleaned up.
     if (!safeEndpoint(row.endpoint)) return 'gone';
     try {
-      await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, JSON.stringify(p), { TTL: 3600, urgency: 'normal', timeout: TIMEOUT_MS });
+      // Each reminder carries a signed "snooze" so the phone can ask for it to come back without being signed in. The test
+      // notification does not (its tag is not a reminder).
+      const body = p.tag === 'test' ? p : { ...p, snooze: { id: p.tag, sig: snoozeSignature(env('CRON_SECRET'), row.endpoint, p.tag) } };
+      await webpush.sendNotification({ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } }, JSON.stringify(body), { TTL: 3600, urgency: 'normal', timeout: TIMEOUT_MS });
       return 'ok';
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
@@ -303,6 +363,25 @@ async function test(token: string): Promise<{ sent: number; devices: number }> {
   return { sent, devices: rows.length };
 }
 
+/** Snoozes one reminder on one device. The signature, made when the reminder was sent, is the only proof needed; it is checked first. */
+export async function snooze(raw: unknown): Promise<{ ok: boolean }> {
+  const o = asObject(raw);
+  const { endpoint, id, sig } = o;
+  if (typeof endpoint !== 'string' || typeof id !== 'string' || typeof sig !== 'string' || !safeEndpoint(endpoint) || !/^[a-z0-9-]{1,30}$/.test(id)) {
+    throw Object.assign(new Error('Not allowed.'), { status: 401 });
+  }
+  if (!sameSecret(sig, snoozeSignature(env('CRON_SECRET'), endpoint, id))) throw Object.assign(new Error('Not allowed.'), { status: 401 });
+  const r = await rest(`/push_subscriptions?select=${COLUMNS}&endpoint=eq.${encodeURIComponent(endpoint)}`);
+  if (!r.ok) throw new Error('Could not read the device.');
+  const row = ((await r.json()) as SubRow[])[0];
+  const next = row ? withSnooze(row.schedule, row.last_sent, id, new Date()) : null;
+  if (!next) return { ok: false };
+  const w = await rest(`/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: 'PATCH', body: JSON.stringify({ last_sent: next }) });
+  if (!w.ok) throw new Error('Could not save the snooze.');
+  console.log('push snooze: saved');
+  return { ok: true };
+}
+
 export default async function handler(req: Req, res: Res): Promise<void> {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
@@ -315,6 +394,8 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   }
   const token = header(req, 'authorization').replace(/^Bearer\s+/i, '');
   try {
+    // A phone asking to snooze a reminder carries no sign-in, only the signature that came with the notification.
+    if (!token && asObject(req.body).snooze) return void res.status(200).json(await snooze(asObject(req.body).snooze));
     if (sameSecret(token, env('CRON_SECRET'))) return void res.status(200).json(await tick());
     if (!token) return void res.status(401).json({ error: 'Not allowed.' });
     return void res.status(200).json(await test(token));

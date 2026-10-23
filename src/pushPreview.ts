@@ -1,7 +1,8 @@
 import type { DayDef } from './program';
 import { buildPushSchedule } from './push';
 import type { PushItem } from './push';
-import type { ReminderPlan } from './reminders';
+import { inQuiet } from './reminders';
+import type { ReminderId, ReminderPlan } from './reminders';
 
 // What push notifications will do, in words, for the Settings screen: when each reminder fires next, and what the server
 // actually holds for each device. This mirrors the sender (api/push.ts) on purpose: the sender runs on the server and
@@ -45,25 +46,36 @@ export interface Fire {
 const asObject = (x: unknown): Record<string, unknown> => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : {});
 
 /** The next time a reminder goes out, given what has already been sent. `days` empty means every day (0 = Sunday). */
-export function nextFire(item: { id: string; time: string; days: number[] }, tz: string, now: Date, lastSent: unknown = {}): Fire | null {
+export function nextFire(item: { id: string; time: string; days: number[]; quiet?: { from: string; to: string } }, tz: string, now: Date, lastSent: unknown = {}): Fire | null {
   const local = zonedParts(now, tz);
   const m = TIME.exec(item.time);
   if (!local || !m) return null;
   const target = Number(m[1]) * 60 + Number(m[2]);
   const sentToday = asObject(lastSent)[item.id] === local.date;
+  const q = item.quiet;
+  // A reminder whose own time is inside quiet hours is never sent, and a late one is held back if quiet hours have begun since.
+  if (q && inQuiet(target, q.from, q.to)) return null;
   for (let d = 0; d <= 7; d++) {
     const weekday = (local.weekday + d) % 7;
     if (item.days.length && !item.days.includes(weekday)) continue;
     if (d === 0) {
       if (sentToday) continue;
       if (target >= local.minutes) return { when: 'today', weekday, time: item.time };
-      if (local.minutes - target < WINDOW_MINUTES) return { when: 'now', weekday, time: item.time };
+      if (local.minutes - target < WINDOW_MINUTES) {
+        if (q && inQuiet(local.minutes, q.from, q.to)) continue;
+        return { when: 'now', weekday, time: item.time };
+      }
       continue;
     }
     return { when: d === 1 ? 'tomorrow' : 'later', weekday, time: item.time };
   }
   return null;
 }
+
+const minutesOf = (t: string): number => {
+  const m = TIME.exec(t);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : -1;
+};
 
 export function fireText(f: Fire | null): string {
   if (!f) return 'never';
@@ -81,10 +93,12 @@ export function daysText(days: number[]): string {
 }
 
 /** For a reminder row on this device: when it will next arrive, or null if it is switched off or has nothing to send. */
-export function nextForRow(id: keyof ReminderPlan, plan: ReminderPlan, program: DayDef[], tz: string, now: Date): string | null {
+export function nextForRow(id: ReminderId, plan: ReminderPlan, program: DayDef[], tz: string, now: Date): string | null {
   if (!plan[id].on) return null;
   const item = buildPushSchedule(plan, program).find((r) => r.id === id);
-  return item ? fireText(nextFire(item, tz, now)) : null;
+  if (!item) return null;
+  const f = nextFire(item, tz, now);
+  return f ? fireText(f) : item.quiet && inQuiet(minutesOf(item.time), item.quiet.from, item.quiet.to) ? 'never (inside quiet hours)' : 'never';
 }
 
 // ---- What the server holds ----
@@ -107,7 +121,10 @@ export function readSchedule(raw: unknown): PushItem[] {
     if (typeof o.time !== 'string' || !TIME.test(o.time)) continue;
     if (typeof o.title !== 'string' || typeof o.body !== 'string') continue;
     const days = Array.isArray(o.days) ? [...new Set(o.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
-    out.push({ id: o.id, time: o.time, days, title: o.title.slice(0, 80), body: o.body.slice(0, 160) });
+    const item: PushItem = { id: o.id, time: o.time, days, title: o.title.slice(0, 80), body: o.body.slice(0, 160) };
+    const q = asObject(o.quiet);
+    if (typeof q.from === 'string' && TIME.test(q.from) && typeof q.to === 'string' && TIME.test(q.to) && q.from !== q.to) item.quiet = { from: q.from, to: q.to };
+    out.push(item);
   }
   return out;
 }
@@ -119,6 +136,15 @@ export interface ItemView {
   daysText: string;
   next: string;
   lastSent: string | null;
+  /** "17:05" (on the device's clock) when the reminder was snoozed and is waiting to come back, otherwise null. */
+  snoozedUntil: string | null;
+}
+
+/** When a snoozed reminder will come back, as a clock time in the device's zone, or null if there is no usable snooze. */
+function snoozedUntil(raw: unknown, tz: string): string | null {
+  const t = typeof raw === 'string' ? Date.parse(raw) : NaN;
+  const p = Number.isNaN(t) ? null : zonedParts(new Date(t), tz);
+  return p ? `${String(Math.floor(p.minutes / 60)).padStart(2, '0')}:${String(p.minutes % 60).padStart(2, '0')}` : null;
 }
 
 export interface DeviceView {
@@ -131,6 +157,8 @@ export interface DeviceView {
   items: ItemView[];
   /** For this device only: the server holds exactly what the screen says. Always true for other devices. */
   inSync: boolean;
+  /** "22:00 to 07:00" while quiet hours are on, otherwise null. */
+  quiet: string | null;
   /** "3 hours ago" when the server's last attempt to reach this device failed, otherwise null. */
   unreachable: string | null;
 }
@@ -178,7 +206,9 @@ export function describeDevices(rows: ServerRow[], thisEndpoint: string | null, 
         daysText: daysText(i.days),
         next: fireText(nextFire(i, r.tz, now, r.last_sent)),
         lastSent: typeof asObject(r.last_sent)[i.id] === 'string' ? (asObject(r.last_sent)[i.id] as string) : null,
+        snoozedUntil: snoozedUntil(asObject(r.last_sent)['_snooze:' + i.id], r.tz),
       })),
+      quiet: schedule[0]?.quiet ? `${schedule[0].quiet.from} to ${schedule[0].quiet.to}` : null,
       unreachable: typeof asObject(r.last_sent)._fail === 'string' && !Number.isNaN(Date.parse(asObject(r.last_sent)._fail as string)) ? agoText(asObject(r.last_sent)._fail as string, now) : null,
       inSync: !isThis || (JSON.stringify(schedule) === wanted && r.tz === deviceTz),
     };

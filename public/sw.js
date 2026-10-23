@@ -25,8 +25,9 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
-// Push notifications. The server sends a small JSON message ({ title, body, tag }); the browser requires that every push
-// shows something, so a message without readable content still shows a plain one.
+// Push notifications. The server sends a small JSON message ({ title, body, tag, snooze }); the browser requires that every
+// push shows something, so a message without readable content still shows a plain one. A reminder carries a signed
+// `snooze` (made by the server), which is what adds the "Snooze 1 hour" button.
 self.addEventListener('push', (e) => {
   let d = {};
   try {
@@ -35,19 +36,49 @@ self.addEventListener('push', (e) => {
     d = {};
   }
   const text = (v, fallback) => (typeof v === 'string' && v.trim() ? v.slice(0, 200) : fallback);
-  e.waitUntil(
-    self.registration.showNotification(text(d.title, 'Life Dashboard'), {
-      body: text(d.body, ''),
-      tag: text(d.tag, 'life-dashboard'),
-      icon: './icon-192.png',
-      badge: './icon-192.png',
-    }),
-  );
+  const snooze = d.snooze && typeof d.snooze.id === 'string' && typeof d.snooze.sig === 'string' ? { id: d.snooze.id.slice(0, 30), sig: d.snooze.sig.slice(0, 128) } : null;
+  const options = {
+    body: text(d.body, ''),
+    tag: text(d.tag, 'life-dashboard'),
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    data: { snooze },
+  };
+  if (snooze) options.actions = [{ action: 'snooze', title: 'Snooze 1 hour' }];
+  e.waitUntil(self.registration.showNotification(text(d.title, 'Life Dashboard'), options));
 });
 
-// Tapping a notification brings the app forward if it is already open, otherwise opens it.
+// Asks the server to send this reminder again in an hour. The phone cannot do this alone: a service worker is shut down
+// within seconds, so a timer here would be lost. Returns whether the server accepted it.
+async function snoozeReminder(snooze) {
+  try {
+    const sub = await self.registration.pushManager.getSubscription();
+    if (!sub || !snooze) return false;
+    const res = await fetch('./api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snooze: { endpoint: sub.endpoint, id: snooze.id, sig: snooze.sig } }),
+    });
+    if (!res.ok) return false;
+    const out = await res.json().catch(() => ({}));
+    return out.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+// Tapping a notification brings the app forward if it is already open, otherwise opens it. The Snooze button does neither.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
+  const snooze = e.notification.data && e.notification.data.snooze;
+  if (e.action === 'snooze') {
+    e.waitUntil(
+      snoozeReminder(snooze).then((ok) =>
+        ok ? undefined : self.registration.showNotification('Couldn’t snooze', { body: 'Open the app to check your reminders.', tag: 'snooze-failed', icon: './icon-192.png' }),
+      ),
+    );
+    return;
+  }
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       const open = list.find((c) => 'focus' in c);
