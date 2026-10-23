@@ -212,6 +212,7 @@ describe('the snooze request from the phone', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -266,10 +267,9 @@ describe('the snooze request from the phone', () => {
     expect(r.body).toMatchObject({ devices: 0 }); // the clock ran as usual
   });
   it('each reminder is sent with its own signature, and the test notification without one', async () => {
-    // The tick uses the real clock, so line the reminder up with it.
-    const p = zonedParts(new Date(), LAGOS)!;
-    const time = `${String(Math.floor(p.minutes / 60)).padStart(2, '0')}:${String(p.minutes % 60).padStart(2, '0')}`;
-    const due = [{ id: 'checkin', time, days: [], title: 'Time to check in', body: 'b' }];
+    // The tick reads the clock, so fix it at 21:00 in Lagos.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-09T21:00:30+01:00') });
+    const due = [{ id: 'checkin', time: '21:00', days: [], title: 'Time to check in', body: 'b' }];
     fetchMock.mockResolvedValueOnce(json([{ ...stored(due), last_sent: {} }]));
     await call({}, `Bearer ${ENV.CRON_SECRET}`);
     expect(sendNotification).toHaveBeenCalledTimes(1);
