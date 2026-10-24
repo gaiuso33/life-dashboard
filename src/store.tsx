@@ -20,7 +20,8 @@ type Action =
   | { t: 'load'; data: AppData }
   | { t: 'day'; date: string; patch: Partial<DayLog> }
   | { t: 'reps'; date: string; day: DayKey; ex: string; idx: number; sets: number; value: number | null }
-  | { t: 'fillReps'; date: string; day: DayKey; ex: string; reps: (number | null)[]; load?: string }
+  | { t: 'fillReps'; date: string; day: DayKey; ex: string; reps: (number | null)[]; load?: string; kg?: number }
+  | { t: 'load-kg'; date: string; day: DayKey; ex: string; kg: number | null }
   | { t: 'load-text'; date: string; day: DayKey; ex: string; value: string }
   | { t: 'finish'; date: string; day: DayKey; finished: boolean }
   | { t: 'body'; entry: BodyEntry }
@@ -103,7 +104,17 @@ function apply(state: AppData, a: Action): AppData {
         ...s,
         reps: { ...s.reps, [a.ex]: a.reps },
         loads: a.load != null && !s.loads[a.ex] ? { ...s.loads, [a.ex]: a.load } : s.loads,
+        ...(a.kg != null && s.kg?.[a.ex] == null && { kg: { ...s.kg, [a.ex]: a.kg } }),
       }));
+    case 'load-kg':
+      return withSession(state, a.date, a.day, (s) => {
+        const { [a.ex]: _gone, ...rest } = s.kg ?? {};
+        void _gone;
+        const kg = a.kg == null ? rest : { ...rest, [a.ex]: a.kg };
+        const { kg: _old, ...others } = s;
+        void _old;
+        return Object.keys(kg).length ? { ...others, kg } : others;
+      });
     case 'load-text':
       return withSession(state, a.date, a.day, (s) => ({ ...s, loads: { ...s.loads, [a.ex]: a.value } }));
     case 'finish':

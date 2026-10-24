@@ -17,6 +17,8 @@ function rng(seed: number) {
   };
 }
 
+/** Starting loads in kilograms for the sample sessions, which rise a little over the weeks. Bodyweight lifts have none. */
+const SAMPLE_KG: Record<string, number> = { bench: 40, incline: 14, ohp: 25, lateral: 6, triext: 12, row: 40 };
 const SAMPLE_LOADS: Record<string, string> = {
   bench: 'Bar + 2 small plates',
   incline: 'Blue dumbbells',
@@ -75,6 +77,7 @@ export function buildSampleData(): AppData {
         const s: Session = { date: k, day: dayKey, loads: {}, reps: {}, finished: true };
         for (const ex of def.exercises) {
           s.loads[ex.id] = SAMPLE_LOADS[ex.id] ?? '';
+          if (SAMPLE_KG[ex.id]) (s.kg ??= {})[ex.id] = SAMPLE_KG[ex.id] + Math.floor(week / 3) * 2.5;
           const ready = lastOfDay[dayKey] === k && READY_TO_PROGRESS.has(ex.id);
           const reps: number[] = [];
           for (let n = 0; n < ex.sets; n++) {

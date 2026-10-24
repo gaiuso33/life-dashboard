@@ -15,7 +15,10 @@ export interface DayLog {
 export interface Session {
   date: string;
   day: DayKey;
+  /** Free text about the load: "blue dumbbells", "bar + 2 plates". */
   loads: Record<string, string>;
+  /** Optional numeric load per exercise, always in kilograms whatever unit is shown. Rep-only logging leaves this out. */
+  kg?: Record<string, number>;
   reps: Record<string, (number | null)[]>;
   finished: boolean;
 }

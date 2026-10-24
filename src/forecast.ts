@@ -1,4 +1,4 @@
-import { weeklyRepTotals, suggestedPace } from './derive';
+import { weeklyRepTotals, weeklyVolume, suggestedPace } from './derive';
 import { backtestWeight, predictAt, savingPaces, shipPaces, weightConfidence, weightFit } from './projection';
 import type { Confidence } from './projection';
 import {monthlySavingPace, survivalTarget, fundBalance, DAYS_PER_MONTH} from './money';
@@ -7,7 +7,7 @@ import { ONE_OFF_WORD, backtestSaving, savingEstimate } from './saving';
 import type { OneOff } from './saving';
 import type { AppData } from './types';
 import { addDays, dayNumber, fmtShort, mondayOf, round1 } from './utils';
-import { fmtMoney, fmtWeight, toDisplayExact, weightUnit } from './units';
+import { fmtMoney, fmtNumber, fmtWeight, toDisplay, toDisplayExact, weightUnit } from './units';
 
 /** A picture of a forecast: what happened so far, and where it could go. Both axes are plain numbers; `xLabel` turns an x into text. */
 export interface FanChartData {
@@ -211,13 +211,9 @@ export function portfolioForecast(data: AppData, today: string): Forecast {
   };
 }
 
-export function strengthForecast(data: AppData, today: string): Forecast {
-  const title = 'Training volume';
-  const currentMonday = mondayOf(today);
-  const weeks = weeklyRepTotals(data, today, 8).filter((w) => w.monday < currentMonday && w.sessions > 0);
-  if (weeks.length < 3) return { id: 'strength', title, headline: 'Needs three finished weeks', detail: 'Finish sessions for a few weeks and the volume trend appears.', tone: 'info' };
-  const xs = weeks.map((_, i) => i);
-  const ys = weeks.map((w) => w.reps);
+/** Least-squares slope of a series per step, and the mean, for a trend line over weeks. */
+function trendOf(ys: number[]): { slope: number; mean: number } {
+  const xs = ys.map((_, i) => i);
   const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
   const my = ys.reduce((a, b) => a + b, 0) / ys.length;
   let num = 0;
@@ -226,16 +222,49 @@ export function strengthForecast(data: AppData, today: string): Forecast {
     num += (x - mx) * (ys[i] - my);
     den += (x - mx) ** 2;
   });
-  const slope = den === 0 ? 0 : num / den;
-  const rel = my > 0 ? slope / my : 0;
+  return { slope: den === 0 ? 0 : num / den, mean: my };
+}
+const confidenceFor = (n: number): Confidence => (n >= 6 ? 'high' : n >= 4 ? 'medium' : 'low');
+/** A week counts towards the weight-lifted trend only if at least this share of its reps had a load logged. */
+export const MIN_LOAD_COVERAGE = 0.5;
+
+export function strengthForecast(data: AppData, today: string): Forecast {
+  const title = 'Training volume';
+  const currentMonday = mondayOf(today);
+  const weeks = weeklyRepTotals(data, today, 8).filter((w) => w.monday < currentMonday && w.sessions > 0);
+  if (weeks.length < 3) return { id: 'strength', title, headline: 'Needs three finished weeks', detail: 'Finish sessions for a few weeks and the volume trend appears.', tone: 'info' };
+
+  // With loads logged, the trend is the weight lifted (reps times load). It needs three recent weeks in a row that mostly have
+  // loads: a person who starts logging loads part-way must not see a jump that is only the logging starting.
+  const volume = weeklyVolume(data, today, 8).filter((w) => w.monday < currentMonday && w.sessions > 0);
+  let run = 0;
+  while (run < volume.length && volume[volume.length - 1 - run].coverage >= MIN_LOAD_COVERAGE) run++;
+  if (run >= 3) {
+    const used = volume.slice(volume.length - run);
+    const { slope, mean } = trendOf(used.map((w) => w.kg));
+    const rel = mean > 0 ? slope / mean : 0;
+    const dir = rel > 0.015 ? 'rising' : rel < -0.015 ? 'falling' : 'flat';
+    const covered = Math.round((used.reduce((a, w) => a + w.coverage, 0) / used.length) * 100);
+    return {
+      id: 'strength',
+      title,
+      headline: `Weight lifted is ${dir}${dir === 'flat' ? '' : `, about ${fmtNumber(Math.max(1, Math.round(toDisplay(Math.abs(slope)))))} ${weightUnit()} a week`}`,
+      detail: `Based on ${used.length} finished weeks of reps times load, counting the ${covered}% of your reps that had a load logged. Timed holds and lifts with no load are left out. Weight lifted going up means you are getting stronger, even if the reps stay the same.`,
+      tone: dir === 'rising' ? 'good' : dir === 'falling' ? 'warn' : 'info',
+      confidence: confidenceFor(used.length),
+    };
+  }
+
+  const { slope, mean } = trendOf(weeks.map((w) => w.reps));
+  const rel = mean > 0 ? slope / mean : 0;
   const dir = rel > 0.015 ? 'rising' : rel < -0.015 ? 'falling' : 'flat';
   return {
     id: 'strength',
     title,
     headline: `Weekly reps are ${dir}${dir === 'flat' ? '' : `, about ${Math.round(Math.abs(slope))} a week`}`,
-    detail: `Based on ${weeks.length} finished weeks. More reps at the same load means you are getting stronger; when every set reaches the top of its range, add load.`,
+    detail: `Based on ${weeks.length} finished weeks. More reps at the same load means you are getting stronger; when every set reaches the top of its range, add load. Log a load for your lifts and this becomes weight lifted.`,
     tone: dir === 'rising' ? 'good' : dir === 'falling' ? 'warn' : 'info',
-    confidence: weeks.length >= 6 ? 'high' : weeks.length >= 4 ? 'medium' : 'low',
+    confidence: confidenceFor(weeks.length),
   };
 }
 

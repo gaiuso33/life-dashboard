@@ -3,7 +3,7 @@ import { programError } from './program';
 import type { DayKey } from './program';
 import { emptyAdvisor, emptyCareer, emptyMoney, emptyRewards } from './types';
 import type { AppData } from './types';
-import { isCurrency } from './units';
+import { MAX_LOAD_KG, isCurrency } from './units';
 
 /**
  * Defensive clean-up of anything that comes from outside the running app: saved data, imported files, other tabs.
@@ -63,7 +63,9 @@ export function sanitize(input: AppData): AppData {
     for (const [ex, l] of Object.entries(obj(s.loads))) if (typeof l === 'string') loads[ex] = l;
     const reps: Record<string, (number | null)[]> = {};
     for (const [ex, r] of Object.entries(obj(s.reps))) reps[ex] = arr(r).slice(0, 20).map((n) => (num(n) != null && (n as number) >= 0 ? (n as number) : null));
-    sessions[k] = { date: s.date, day, loads, reps, finished: s.finished === true };
+    const kg: Record<string, number> = {};
+    for (const [ex, v] of Object.entries(obj(s.kg))) if (num(v) != null && (v as number) > 0 && (v as number) <= MAX_LOAD_KG) kg[ex] = Math.round((v as number) * 100) / 100;
+    sessions[k] = { date: s.date, day, loads, ...(Object.keys(kg).length && { kg }), reps, finished: s.finished === true };
   }
 
   const body = keep(p.body, (b) => {

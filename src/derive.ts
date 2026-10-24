@@ -1,4 +1,4 @@
-import { dayDef, dayForWeekday } from './program';
+import { dayDef, dayForWeekday, getProgram } from './program';
 import type { DayKey, ExerciseDef } from './program';
 import type { AppData, BodyEntry, Session } from './types';
 import { addDays, dayNumber, mondayOf, weekday } from './utils';
@@ -124,6 +124,54 @@ export function weeklyRepTotals(data: AppData, today: string, weeks: number) {
       }
     }
     out.push({ monday, reps, sessions });
+  }
+  return out;
+}
+
+/**
+ * Weight lifted in a session: reps times load for every set that has both, in kilograms. Timed holds and exercises with no load
+ * logged are left out, and `coverage` says what share of the session's reps were counted, so a week of mostly rep-only
+ * logging is not mistaken for a week of light lifting.
+ */
+export function sessionVolume(s: Session): { kg: number; loadedReps: number; reps: number } {
+  const timed = new Set(getProgram().flatMap((d) => d.exercises.filter((e) => e.unit === 'sec').map((e) => e.id)));
+  let kg = 0;
+  let loadedReps = 0;
+  let reps = 0;
+  for (const [ex, arr] of Object.entries(s.reps)) {
+    const load = timed.has(ex) ? undefined : s.kg?.[ex];
+    for (const r of arr) {
+      if (!r) continue;
+      reps += r;
+      if (load) {
+        kg += r * load;
+        loadedReps += r;
+      }
+    }
+  }
+  return { kg, loadedReps, reps };
+}
+
+/** Like `weeklyRepTotals`, with the weight lifted each week and how much of the week's reps had a load. */
+export function weeklyVolume(data: AppData, today: string, weeks: number) {
+  const thisMonday = mondayOf(today);
+  const out: { monday: string; kg: number; coverage: number; sessions: number }[] = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    const monday = addDays(thisMonday, -7 * w);
+    let kg = 0;
+    let loaded = 0;
+    let reps = 0;
+    let sessions = 0;
+    for (let i = 0; i < 7; i++) {
+      const s = finishedSessionOn(data, addDays(monday, i));
+      if (!s) continue;
+      sessions++;
+      const v = sessionVolume(s);
+      kg += v.kg;
+      loaded += v.loadedReps;
+      reps += v.reps;
+    }
+    out.push({ monday, kg, coverage: reps ? loaded / reps : 0, sessions });
   }
   return out;
 }
