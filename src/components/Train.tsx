@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { lastSession, plannedFor, readyForMoreLoad, sessionProgress } from '../derive';
 import type { TrainView } from '../nav';
 import { MOBILITY, WEEKDAY_SHORT, dayDef, getProgram } from '../program';
 import type { DayKey, ExerciseDef } from '../program';
 import { useStore } from '../store';
 import type { Session } from '../types';
+import { MAX_LOAD_KG, loadStep, loadText, nextLoadKg, parseLoad, toDisplay, weightUnit } from '../units';
 import { fmtShort, todayKey, weekdayName } from '../utils';
 
 
@@ -14,7 +16,7 @@ export function Train({ view, setView }: { view: TrainView; setView: (v: TrainVi
     <div className="page">
       <header className="page-head">
         <h1>Train</h1>
-        <p className="sub">Log reps for each set and the load you used. Hit the top of the range on every set and the app tells you to add weight.</p>
+        <p className="sub">Log reps for each set. Adding the weight is optional: the app shows it in your unit and uses it for your training volume. Hit the top of the range on every set and it tells you to add weight.</p>
       </header>
 
       <div className="tabs" role="tablist" aria-label="Session">
@@ -91,6 +93,8 @@ function Exercise({ ex, day, date, session, last }: { ex: ExerciseDef; day: DayK
   const lastReps = last?.reps[ex.id];
   const ready = readyForMoreLoad(ex, last);
   const unit = ex.unit === 'sec' ? 'sec' : 'reps';
+  const timed = ex.unit === 'sec';
+  const lastKg = last?.kg?.[ex.id];
   const untouched = reps.every((r) => r == null);
 
   return (
@@ -105,7 +109,10 @@ function Exercise({ ex, day, date, session, last }: { ex: ExerciseDef; day: DayK
       {ex.note && <p className="note">{ex.note}</p>}
       {ready && (
         <p className="flag" role="note">
-          You hit {ex.max} on every set last time. Add load today.
+          You hit {ex.max} on every set last time.{' '}
+          {lastKg != null && !timed
+            ? `Add load today: try ${toDisplay(nextLoadKg(lastKg))} ${weightUnit()} (last time ${toDisplay(lastKg)} ${weightUnit()}).`
+            : `Add load today, in steps of ${loadStep()} ${weightUnit()}.`}
         </p>
       )}
 
@@ -132,8 +139,9 @@ function Exercise({ ex, day, date, session, last }: { ex: ExerciseDef; day: DayK
       </div>
 
       <div className="load-row">
+        {!timed && <LoadKg exName={ex.name} kg={session?.kg?.[ex.id]} lastKg={lastKg} onChange={(kg) => dispatch({ t: 'load-kg', date, day, ex: ex.id, kg })} />}
         <label className="load">
-          <span>Load</span>
+          <span>Load note</span>
           <input
             type="text"
             value={session?.loads[ex.id] ?? ''}
@@ -144,13 +152,52 @@ function Exercise({ ex, day, date, session, last }: { ex: ExerciseDef; day: DayK
         {lastReps && untouched && (
           <button
             className="btn ghost"
-            onClick={() => dispatch({ t: 'fillReps', date, day, ex: ex.id, reps: lastReps.slice(0, ex.sets), load: last?.loads[ex.id] })}
+            onClick={() => dispatch({ t: 'fillReps', date, day, ex: ex.id, reps: lastReps.slice(0, ex.sets), load: last?.loads[ex.id], kg: lastKg })}
           >
             Copy last time
           </button>
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * The optional weight for one exercise, typed in the unit shown and kept in kilograms. What is being typed is held here, so
+ * "22." or "2" on the way to "22.5" is never rewritten under the cursor.
+ */
+function LoadKg({ exName, kg, lastKg, onChange }: { exName: string; kg?: number; lastKg?: number; onChange: (kg: number | null) => void }) {
+  const unit = weightUnit();
+  const [draft, setDraft] = useState(kg != null ? loadText(kg) : '');
+  useEffect(() => {
+    // Changed from outside (Copy last time, another device, the unit switched): show it.
+    if ((parseLoad(draft) ?? null) !== (kg ?? null)) setDraft(kg != null ? loadText(kg) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kg, unit]);
+  const bad = draft.trim() !== '' && parseLoad(draft) == null;
+  return (
+    <label className="load load-kg">
+      <span>Weight ({unit})</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={draft}
+        placeholder={lastKg != null ? loadText(lastKg) : 'optional'}
+        aria-label={`${exName}, weight in ${unit}`}
+        aria-invalid={bad || undefined}
+        aria-describedby={bad ? `${exName}-load-err`.replace(/\W/g, '-') : undefined}
+        onChange={(e) => {
+          const t = e.target.value.replace(/[^\d.,]/g, '').slice(0, 7);
+          setDraft(t);
+          onChange(parseLoad(t));
+        }}
+      />
+      {bad && (
+        <small id={`${exName}-load-err`.replace(/\W/g, '-')} className="field-err">
+          Enter a weight between 0 and {toDisplay(MAX_LOAD_KG)} {unit}.
+        </small>
+      )}
+    </label>
   );
 }
 

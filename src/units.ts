@@ -183,6 +183,21 @@ export const toDisplay = (kg: number): number => (active.weightUnit === 'lb' ? r
 export const toDisplayExact = (kg: number): number => (active.weightUnit === 'lb' ? kg * LB_PER_KG : kg);
 /** What the person typed, in their unit, as kilograms to store (to the nearest 0.01 kg so it reads back the same). */
 export const fromDisplay = (v: number): number => Math.round((active.weightUnit === 'lb' ? v / LB_PER_KG : v) * 100) / 100;
+/** Heaviest single load that is accepted for an exercise, in kilograms. */
+export const MAX_LOAD_KG = 1000;
+/** A sensible jump when adding load: 2.5 kg, or 5 lb. In the unit being shown. */
+export const loadStep = (): number => (active.weightUnit === 'lb' ? 5 : 2.5);
+/** What is typed into a load box, in the unit shown, to kilograms (2 decimals). Null for empty, zero, negative or silly values. */
+export function parseLoad(text: string): number | null {
+  const t = text.trim().replace(',', '.');
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(t)) return null;
+  const kg = fromDisplay(Number(t));
+  return kg > 0 && kg <= MAX_LOAD_KG ? kg : null;
+}
+/** A load in kilograms as it is typed in the unit shown: "22.5", never "22.50". */
+export const loadText = (kg: number): string => String(toDisplay(kg));
+/** The load to suggest after a session where every set hit the top of the range: one step up, in the unit shown. */
+export const nextLoadKg = (kg: number): number => fromDisplay(toDisplay(kg) + loadStep());
 export const fmtWeight = (kg: number): string => `${toDisplay(kg)} ${active.weightUnit}`;
 /** A change in weight, signed: +0.8 kg. */
 export const fmtWeightDelta = (kg: number): string => {

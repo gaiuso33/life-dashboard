@@ -33,7 +33,8 @@ function mergeSession(o: Session, n: Session): Session {
     const len = Math.max(prev.length, arr.length);
     reps[ex] = Array.from({ length: len }, (_, i) => arr[i] ?? prev[i] ?? null);
   }
-  return { ...n, loads, reps, finished: o.finished || n.finished };
+  const kg = { ...o.kg, ...n.kg };
+  return { ...n, loads, ...(Object.keys(kg).length && { kg }), reps, finished: o.finished || n.finished };
 }
 
 function mergeProject(o: Project, n: Project): Project {
