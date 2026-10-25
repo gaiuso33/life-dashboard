@@ -23,7 +23,16 @@ export interface QuietHours {
   to: string;
 }
 
-export type ReminderPlan = Record<ReminderId, Reminder> & { quiet?: QuietHours };
+/** Nudges worked out from your data on this device: a streak about to end, a reward waiting, a bill due. Each has its own switch. */
+export type EventId = 'streak' | 'reward' | 'bills';
+export const EVENT_IDS: EventId[] = ['streak', 'reward', 'bills'];
+export type EventSwitches = Record<EventId, boolean>;
+export const DEFAULT_EVENTS: EventSwitches = { streak: true, reward: true, bills: true };
+
+export type ReminderPlan = Record<ReminderId, Reminder> & { quiet?: QuietHours; events?: Partial<EventSwitches> };
+
+/** Whether one kind of event nudge is on. Everything is on until the person switches it off. */
+export const eventOn = (plan: ReminderPlan, id: EventId): boolean => plan.events?.[id] !== false;
 
 export const DEFAULT_QUIET: QuietHours = { on: false, from: '22:00', to: '07:00' };
 
@@ -93,6 +102,12 @@ export function loadReminders(): ReminderPlan {
       if (typeof q.from === 'string' && TIME.test(q.from)) quiet.from = q.from;
       if (typeof q.to === 'string' && TIME.test(q.to)) quiet.to = q.to;
       out.quiet = quiet;
+    }
+    const ev = raw?.events;
+    if (ev && typeof ev === 'object') {
+      const events: Partial<EventSwitches> = {};
+      for (const id of EVENT_IDS) if (typeof ev[id] === 'boolean') events[id] = ev[id];
+      if (Object.keys(events).length) out.events = events;
     }
     return out;
   } catch {

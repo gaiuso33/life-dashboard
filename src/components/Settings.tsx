@@ -9,11 +9,13 @@ import { TIER_LABEL } from '../rewards';
 import { promptInstall, useInstall } from '../install';
 import { RegionUnits } from './RegionUnits';
 import { useCloud } from '../cloud/CloudProvider';
+import type { PushItem } from '../push';
 import { currentSubscription, deviceZone, markPushOn, pushSupport, pushWanted, refreshPush, rowFrom, showLocalTest, subscribeThisDevice } from '../push';
 import { describeDevices, nextForRow } from '../pushPreview';
+import { BILL_TIME, REWARD_TIME, STREAK_TIME, buildEventItems } from '../pushEvents';
 import type { DeviceView } from '../pushPreview';
-import { DEFAULT_QUIET, anyReminderOn, buildIcs, downloadIcs, loadReminders, reminderDays, saveReminders, usualDays } from '../reminders';
-import type { Reminder, ReminderId, ReminderPlan } from '../reminders';
+import { DEFAULT_QUIET, EVENT_IDS, anyReminderOn, eventOn, buildIcs, downloadIcs, loadReminders, reminderDays, saveReminders, usualDays } from '../reminders';
+import type { EventId, Reminder, ReminderId, ReminderPlan } from '../reminders';
 import { useStore } from '../store';
 import type { RewardItem, Tier } from '../types';
 import { todayKey } from '../utils';
@@ -33,10 +35,16 @@ const REMINDER_ROWS: { key: ReminderId; label: string; hint: string }[] = [
   { key: 'review', label: 'Weekly review', hint: 'Sundays' },
 ];
 
+const EVENT_ROWS: { id: EventId; label: string; hint: string }[] = [
+  { id: 'streak', label: 'Streak at risk', hint: `At ${STREAK_TIME}, only if you have a streak of 3 or more days and nothing logged today` },
+  { id: 'reward', label: 'Reward ready to claim', hint: `At ${REWARD_TIME}, while an earned reward is still unclaimed` },
+  { id: 'bills', label: 'Bill due', hint: `At ${BILL_TIME} on the day a bill is due and not ticked` },
+];
+
 const DENIED_TEXT = 'Notifications are blocked for this site. Allow them in your browser’s site settings, then try again.';
 
 /** Real push notifications: they arrive even when the app is closed. Needs an account, so the server knows where to send. */
-function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () => void }) {
+function PushNotifications({ plan, events, onSync }: { plan: ReminderPlan; events: PushItem[]; onSync: () => void }) {
   const cloud = useCloud();
   const support = pushSupport();
   const [on, setOn] = useState(false);
@@ -57,7 +65,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
   // Changed a time or switched a reminder? Tell the server, so what it sends matches what this screen says.
   useEffect(() => {
     if (!on || !signedIn) return;
-    void refreshPush((row) => cloud.savePush(row), getProgram(), plan).catch(() => setMsg('Couldn’t update your reminder times on the server. They will retry next time the app syncs.'));
+    void refreshPush((row) => cloud.savePush(row), getProgram(), plan, events).catch(() => setMsg('Couldn’t update your reminder times on the server. They will retry next time the app syncs.'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [on, signedIn, plan]);
 
@@ -74,7 +82,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
     setBusy(true);
     setMsg('');
     try {
-      const res = await subscribeThisDevice(plan, getProgram());
+      const res = await subscribeThisDevice(plan, getProgram(), events);
       if (!res.ok) {
         setMsg(res.reason === 'denied' ? DENIED_TEXT : res.reason === 'dismissed' ? 'Notifications weren’t allowed, so nothing was turned on.' : 'This device couldn’t be set up for push notifications.');
         return;
@@ -109,7 +117,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
     try {
       const rows = await cloud.listPush();
       const sub = await currentSubscription();
-      setView(describeDevices(rows, sub?.endpoint ?? null, plan, getProgram(), new Date(), deviceZone()));
+      setView(describeDevices(rows, sub?.endpoint ?? null, plan, getProgram(), new Date(), deviceZone(), events));
     } catch (e) {
       fail(e);
     } finally {
@@ -121,7 +129,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
     try {
       const sub = await currentSubscription();
       if (!sub) throw new Error('This device has no notification address. Turn push off and on again.');
-      const row = rowFrom(sub, plan, getProgram());
+      const row = rowFrom(sub, plan, getProgram(), events);
       await cloud.savePush(row);
       markPushOn(row);
       setBusy(false);
@@ -250,6 +258,7 @@ function PushNotifications({ plan, onSync }: { plan: ReminderPlan; onSync: () =>
 }
 
 function Reminders({ onSync }: { onSync: () => void }) {
+  const { data } = useStore();
   const [plan, setPlan] = useState<ReminderPlan>(loadReminders);
   const program = getProgram();
   const now = new Date();
@@ -260,6 +269,8 @@ function Reminders({ onSync }: { onSync: () => void }) {
     setMade(false);
   };
   const set = (k: ReminderId, p: Partial<Reminder>) => save({ ...plan, [k]: { ...plan[k], ...p } });
+  const events = useMemo(() => buildEventItems(data, plan), [data, plan]);
+  const setEvent = (id: EventId, on: boolean) => save({ ...plan, events: { ...plan.events, [id]: on } });
   const quiet = plan.quiet ?? DEFAULT_QUIET;
   const setQuiet = (p: Partial<typeof quiet>) => save({ ...plan, quiet: { ...quiet, ...p } });
   // Which weekdays a reminder is on, shown as seven buttons. Choosing exactly the usual days goes back to following them.
@@ -339,12 +350,26 @@ function Reminders({ onSync }: { onSync: () => void }) {
           </div>
         </li>
       </ul>
+      <h3>Nudges from your data</h3>
+      <p className="note first">These are worked out on this device from what you have logged. The server is only told a date, a time and fixed wording such as “A bill is due today”, never what you logged. They are push notifications only, not in the calendar file.</p>
+      <ul className="rows">
+        {EVENT_ROWS.map((r) => (
+          <li key={r.id} className="row rem-row">
+            <label className="check">
+              <input type="checkbox" checked={eventOn(plan, r.id)} onChange={(e) => setEvent(r.id, e.target.checked)} />
+              <span>
+                <b>{r.label}</b> <small className="muted-s">{r.hint}</small>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
       {quiet.on && (
         <p className="note">
           A reminder whose time falls inside quiet hours is skipped, in push notifications and in the calendar file. A snoozed one waits until quiet hours end. Each push notification has a “Snooze 1 hour” button.
         </p>
       )}
-      <PushNotifications plan={plan} onSync={onSync} />
+      <PushNotifications plan={plan} events={events} onSync={onSync} />
       <h3>Calendar file</h3>
       <p className="note first">Your phone’s calendar does the reminding, even when this app is closed, and nothing is sent anywhere.</p>
       <div className="row-action">
