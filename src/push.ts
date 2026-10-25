@@ -15,12 +15,14 @@ export interface PushItem {
   days: number[];
   title: string;
   body: string;
+  /** Set for a one-off nudge: it goes out only on this local date (YYYY-MM-DD) and `days` is ignored. */
+  date?: string;
   /** Only present while quiet hours are on: nothing is sent between `from` and `to` on this device's clock. */
   quiet?: { from: string; to: string };
 }
 
 /** What the server is given for one device: only the switched-on reminders, on the days chosen, with the quiet window if any. */
-export function buildPushSchedule(plan: ReminderPlan, program: DayDef[]): PushItem[] {
+export function buildPushSchedule(plan: ReminderPlan, program: DayDef[], events: PushItem[] = []): PushItem[] {
   const text: Record<ReminderId, { title: string; body: string }> = {
     checkin: { title: 'Time to check in', body: 'Tick your plates and rate your energy for today.' },
     training: { title: 'Training day', body: 'Open your programme and log your sets.' },
@@ -35,6 +37,8 @@ export function buildPushSchedule(plan: ReminderPlan, program: DayDef[]): PushIt
     if (quiet) item.quiet = { ...quiet };
     out.push(item);
   }
+  // One-off nudges worked out on this device (see pushEvents.ts). They follow quiet hours like everything else.
+  for (const e of events) out.push(quiet ? { ...e, quiet: { ...quiet } } : { ...e });
   return out;
 }
 
@@ -132,18 +136,18 @@ export async function currentSubscription(): Promise<PushSubscription | null> {
   }
 }
 
-export const rowFrom = (sub: PushSubscription, plan: ReminderPlan, program: DayDef[]): PushRow => ({
+export const rowFrom = (sub: PushSubscription, plan: ReminderPlan, program: DayDef[], events: PushItem[] = []): PushRow => ({
   endpoint: sub.endpoint,
   p256dh: toB64(sub.getKey('p256dh')),
   auth: toB64(sub.getKey('auth')),
   tz: deviceZone(),
-  schedule: buildPushSchedule(plan, program),
+  schedule: buildPushSchedule(plan, program, events),
 });
 
 export type EnableResult = { ok: true; row: PushRow } | { ok: false; reason: 'denied' | 'dismissed' | 'unsupported' | 'failed' };
 
 /** Asks permission (this must come from a tap), subscribes this device, and returns the row to save on the server. */
-export async function subscribeThisDevice(plan: ReminderPlan, program: DayDef[]): Promise<EnableResult> {
+export async function subscribeThisDevice(plan: ReminderPlan, program: DayDef[], events: PushItem[] = []): Promise<EnableResult> {
   if (pushSupport() !== 'ok') return { ok: false, reason: 'unsupported' };
   try {
     const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
@@ -152,7 +156,7 @@ export async function subscribeThisDevice(plan: ReminderPlan, program: DayDef[])
     const reg = await registration();
     if (!reg) return { ok: false, reason: 'unsupported' };
     const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(vapidKey()) }));
-    return { ok: true, row: rowFrom(sub, plan, program) };
+    return { ok: true, row: rowFrom(sub, plan, program, events) };
   } catch {
     return { ok: false, reason: 'failed' };
   }
@@ -180,11 +184,11 @@ export const needsResend = (row: PushRow): boolean => get(SAVED_SLOT) !== JSON.s
  * Keeps the server's copy current after the reminder times, the programme days or the time zone change.
  * Does nothing unless this device is switched on and still has permission.
  */
-export async function refreshPush(save: (row: PushRow) => Promise<void>, program: DayDef[], plan: ReminderPlan = loadReminders()): Promise<boolean> {
+export async function refreshPush(save: (row: PushRow) => Promise<void>, program: DayDef[], plan: ReminderPlan = loadReminders(), events: PushItem[] = []): Promise<boolean> {
   if (!pushWanted() || pushSupport() !== 'ok' || Notification.permission !== 'granted') return false;
   const sub = await currentSubscription();
   if (!sub) return false;
-  const row = rowFrom(sub, plan, program);
+  const row = rowFrom(sub, plan, program, events);
   if (!needsResend(row)) return false;
   await save(row);
   markPushOn(row);

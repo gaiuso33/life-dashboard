@@ -18,6 +18,8 @@ export interface ReminderItem {
   days: number[];
   title: string;
   body: string;
+  /** A one-off nudge: sent only on this local date (YYYY-MM-DD), whatever `days` says. */
+  date?: string;
   /** Nothing is sent while the device's clock is inside this window (it may run past midnight). */
   quiet?: { from: string; to: string };
 }
@@ -42,6 +44,7 @@ export interface Payload {
 /** A reminder that is a few minutes late (the clock can drift or skip) still goes out, but not one that is hours late. */
 export const WINDOW_MINUTES = 15;
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 /** Key inside `last_sent` that holds when a device first could not be reached. Reminder ids cannot look like this. */
 export const FAIL_KEY = '_fail';
 /** Prefix of the keys in `last_sent` that hold when a snoozed reminder should come back. Reminder ids cannot look like this. */
@@ -108,6 +111,7 @@ export function cleanSchedule(raw: unknown): ReminderItem[] {
     if (typeof o.title !== 'string' || typeof o.body !== 'string') continue;
     const days = Array.isArray(o.days) ? [...new Set(o.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
     const item: ReminderItem = { id: o.id, time: o.time, days, title: o.title.slice(0, 80), body: o.body.slice(0, 160) };
+    if (typeof o.date === 'string' && DATE.test(o.date)) item.date = o.date;
     const q = asObject(o.quiet);
     if (typeof q.from === 'string' && TIME.test(q.from) && typeof q.to === 'string' && TIME.test(q.to) && q.from !== q.to) item.quiet = { from: q.from, to: q.to };
     out.push(item);
@@ -134,7 +138,9 @@ export function dueReminders(schedule: unknown, lastSent: unknown, tz: string, n
     const late = local.minutes - (h * 60 + m);
     // A reminder set very close to midnight and delayed past it is skipped, which is better than sending it a day late.
     if (late < 0 || late >= WINDOW_MINUTES) return false;
-    if (r.days.length && !r.days.includes(local.weekday)) return false;
+    if (r.date) {
+      if (r.date !== local.date) return false;
+    } else if (r.days.length && !r.days.includes(local.weekday)) return false;
     return sent[r.id] !== local.date;
   });
   for (const r of items) {

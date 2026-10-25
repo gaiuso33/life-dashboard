@@ -9,6 +9,8 @@ import type { Keys } from './engine';
 import { forgetKeys, recallKey, rememberKey } from './keystore';
 import { getProgram } from '../program';
 import { currentSubscription, refreshPush, unsubscribeThisDevice } from '../push';
+import { buildEventItems } from '../pushEvents';
+import { loadReminders } from '../reminders';
 import type { PushRow } from '../push';
 import type { ServerRow } from '../pushPreview';
 
@@ -178,7 +180,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
         write(LAST_SLOT, res.at);
         setStatus('idle');
         // Keep the server's copy of this device's reminders current (time zone, times, programme days).
-        void refreshPush((row) => api.savePush(row), getProgram()).catch(() => undefined);
+        void refreshPush((row) => api.savePush(row), getProgram(), loadReminders(), buildEventItems(next, loadReminders())).catch(() => undefined);
         if (rememberRef.current) {
           // Keep the unlocked key on this device (non-extractable) so the passphrase isn't asked for again.
           const uid = api.session.user.id;

@@ -15,7 +15,9 @@ const LONG_DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frida
 const SHORT_DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-export const REMINDER_NAMES: Record<string, string> = { checkin: 'Daily check-in', training: 'Training day', money: 'Log spending', review: 'Weekly review' };
+export const REMINDER_NAMES: Record<string, string> = { checkin: 'Daily check-in', training: 'Training day', money: 'Log spending', review: 'Weekly review', streak: 'Streak at risk', reward: 'Reward ready' };
+/** The name shown for a reminder id; a due bill has a different id for each date. */
+export const reminderName = (id: string): string => REMINDER_NAMES[id] ?? (id.startsWith('bill-') ? 'Bill due' : id);
 
 interface Parts {
   date: string;
@@ -46,7 +48,7 @@ export interface Fire {
 const asObject = (x: unknown): Record<string, unknown> => (x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : {});
 
 /** The next time a reminder goes out, given what has already been sent. `days` empty means every day (0 = Sunday). */
-export function nextFire(item: { id: string; time: string; days: number[]; quiet?: { from: string; to: string } }, tz: string, now: Date, lastSent: unknown = {}): Fire | null {
+export function nextFire(item: { id: string; time: string; days: number[]; date?: string; quiet?: { from: string; to: string } }, tz: string, now: Date, lastSent: unknown = {}): Fire | null {
   const local = zonedParts(now, tz);
   const m = TIME.exec(item.time);
   if (!local || !m) return null;
@@ -57,7 +59,8 @@ export function nextFire(item: { id: string; time: string; days: number[]; quiet
   if (q && inQuiet(target, q.from, q.to)) return null;
   for (let d = 0; d <= 7; d++) {
     const weekday = (local.weekday + d) % 7;
-    if (item.days.length && !item.days.includes(weekday)) continue;
+    // A one-off nudge applies on its own date only.
+    if (item.date ? item.date !== dateAfter(local.date, d) : item.days.length && !item.days.includes(weekday)) continue;
     if (d === 0) {
       if (sentToday) continue;
       if (target >= local.minutes) return { when: 'today', weekday, time: item.time };
@@ -70,6 +73,13 @@ export function nextFire(item: { id: string; time: string; days: number[]; quiet
     return { when: d === 1 ? 'tomorrow' : 'later', weekday, time: item.time };
   }
   return null;
+}
+
+/** The date `n` days after a YYYY-MM-DD date. */
+function dateAfter(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
 }
 
 const minutesOf = (t: string): number => {
@@ -122,6 +132,7 @@ export function readSchedule(raw: unknown): PushItem[] {
     if (typeof o.title !== 'string' || typeof o.body !== 'string') continue;
     const days = Array.isArray(o.days) ? [...new Set(o.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
     const item: PushItem = { id: o.id, time: o.time, days, title: o.title.slice(0, 80), body: o.body.slice(0, 160) };
+    if (typeof o.date === 'string' && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(o.date)) item.date = o.date;
     const q = asObject(o.quiet);
     if (typeof q.from === 'string' && TIME.test(q.from) && typeof q.to === 'string' && TIME.test(q.to) && q.from !== q.to) item.quiet = { from: q.from, to: q.to };
     out.push(item);
@@ -188,8 +199,8 @@ export function agoText(iso: string | undefined, now: Date): string {
 }
 
 /** Turns the server's rows into something readable, this device first. */
-export function describeDevices(rows: ServerRow[], thisEndpoint: string | null, plan: ReminderPlan, program: DayDef[], now: Date, deviceTz: string): DeviceView[] {
-  const wanted = JSON.stringify(buildPushSchedule(plan, program));
+export function describeDevices(rows: ServerRow[], thisEndpoint: string | null, plan: ReminderPlan, program: DayDef[], now: Date, deviceTz: string, events: PushItem[] = []): DeviceView[] {
+  const wanted = JSON.stringify(buildPushSchedule(plan, program, events));
   const views = rows.map((r): DeviceView => {
     const schedule = readSchedule(r.schedule);
     const isThis = thisEndpoint !== null && r.endpoint === thisEndpoint;
@@ -201,9 +212,9 @@ export function describeDevices(rows: ServerRow[], thisEndpoint: string | null, 
       updatedAgo: agoText(r.updated_at, now),
       items: schedule.map((i) => ({
         id: i.id,
-        name: REMINDER_NAMES[i.id] ?? i.id,
+        name: reminderName(i.id),
         time: i.time,
-        daysText: daysText(i.days),
+        daysText: i.date ? `on ${i.date}` : daysText(i.days),
         next: fireText(nextFire(i, r.tz, now, r.last_sent)),
         lastSent: typeof asObject(r.last_sent)[i.id] === 'string' ? (asObject(r.last_sent)[i.id] as string) : null,
         snoozedUntil: snoozedUntil(asObject(r.last_sent)['_snooze:' + i.id], r.tz),
