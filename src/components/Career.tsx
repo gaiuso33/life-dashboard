@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { isDemo } from '../demo';
+import { PrivateGitHub } from './PrivateGitHub';
+import { combineSyncs, fetchPrivateCommits, loadChoices, loadToken, publicOnly } from '../githubPrivate';
 import type { FormEvent } from 'react';
 import { commitStreak, commitsOn, goalForecast, heatmap, level, milestoneProgress, newId, totalCommits, weekStats } from '../career';
 import { GitHubError, SYNC_DAYS, fetchCommits, mergeCommits } from '../github';
@@ -23,6 +26,8 @@ export function Career() {
   const streak = commitStreak(c, today);
   const map = heatmap(c, today, 12);
   const [status, setStatus] = useState<{ kind: 'idle' | 'busy' | 'ok' | 'error'; text: string }>({ kind: 'idle', text: '' });
+  const [, setTick] = useState(0);
+  const chosen = !isDemo && !!loadToken() && loadChoices().length > 0;
   const [name, setName] = useState('');
   const [concept, setConcept] = useState('');
   const [course, setCourse] = useState('');
@@ -35,12 +40,26 @@ export function Career() {
   const sync = async () => {
     setStatus({ kind: 'busy', text: 'Syncing with GitHub…' });
     try {
-      const r = await fetchCommits(c.githubUser);
+      let r = await fetchCommits(c.githubUser);
+      let warning = '';
+      const token = isDemo ? '' : loadToken();
+      const choices = token ? loadChoices() : [];
+      if (token && choices.length) {
+        try {
+          r = combineSyncs(r, await fetchPrivateCommits(token, c.githubUser, choices, new Set(r.shas ?? [])));
+        } catch (e) {
+          // The public commits are still used, but nothing already stored is lowered or cleared by a sync that could not see the rest.
+          r = publicOnly(r);
+          warning = ` Your private repositories could not be read: ${e instanceof GitHubError ? e.message : 'something went wrong.'}`;
+        }
+      }
       set({ commits: mergeCommits(c.commits, r), lastSync: today });
       const repos = r.repos.length ? ` across ${r.repos.length} ${r.repos.length === 1 ? 'repo' : 'repos'}` : '';
+      const withPrivate = token && choices.length && !warning;
       setStatus({
-        kind: 'ok',
-        text: r.total === 0 ? `No public commits found in the last ${SYNC_DAYS} days.` : `Found ${r.total} commits${repos}.${r.truncated ? ' GitHub limits results, so the oldest days may be missing.' : ''}`,
+        kind: warning ? 'error' : 'ok',
+        text:
+          (r.total === 0 ? `No ${withPrivate ? '' : 'public '}commits found in the last ${SYNC_DAYS} days.` : `Found ${r.total} commits${repos}.${r.truncated ? ' GitHub limits results, so the oldest days may be missing.' : ''}`) + warning,
       });
     } catch (e) {
       setStatus({ kind: 'error', text: e instanceof GitHubError ? e.message : 'Something went wrong while syncing. Try again.' });
@@ -114,8 +133,9 @@ export function Career() {
             </button>
           </form>
           <p className={status.kind === 'error' ? 'err' : status.kind === 'ok' ? 'ok' : 'note'} role="status">
-            {status.text || (c.lastSync ? `Last synced ${fmtShort(c.lastSync)}. Only public commits show up.` : 'Counts public commits on default branches from the last 90 days. Private repositories and other branches stay invisible, so mark those days by hand on Today.')}
+            {status.text || (c.lastSync ? `Last synced ${fmtShort(c.lastSync)}.${chosen ? '' : ' Only public commits show up.'}` : 'Counts public commits on default branches from the last 90 days. Private repositories and other branches stay invisible unless you add a token below, so otherwise mark those days by hand on Today.')}
           </p>
+          {!isDemo && <PrivateGitHub onChanged={() => setTick((n) => n + 1)} />}
 
           <dl className="stats compact">
             <div>

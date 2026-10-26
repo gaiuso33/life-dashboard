@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { learnedOf } from '../learn';
 import { idbStore } from '../photos';
+import { clearToken } from '../githubPrivate';
 import {CATEGORIES, PROTECTED_CATEGORIES, categoriesOf, newId} from '../money';
 import type { Tab } from '../nav';
 import { DEFAULT_PROGRAM, WEEKDAY_SHORT, getProgram, programError } from '../program';
@@ -881,8 +882,9 @@ function DataSection({ onSync }: { onSync: () => void }) {
         <button
           className="btn"
           onClick={() => {
-            if (window.confirm('Erase everything on this device, including progress photos, and start empty? Download a copy first if you might want it back.')) {
+            if (window.confirm('Erase everything on this device, including progress photos and any GitHub token, and start empty? Download a copy first if you might want it back.')) {
               dispatch({ t: 'fresh' });
+              clearToken();
               void idbStore().clear().catch(() => undefined);
             }
           }}
