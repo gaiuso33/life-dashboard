@@ -48,9 +48,10 @@ describe('the token and the chosen repositories on this device', () => {
     expect(saveToken(`  ${TOKEN}\n`)).toBe(true);
     expect(loadToken()).toBe(TOKEN);
     saveChoices([{ name: 'me/private-app', allBranches: true }]);
-    expect([...store.keys()].sort()).toEqual(['life-dashboard:github-repos', 'life-dashboard:github-token']);
+    expect([...store.keys()].sort()).toEqual(['life-dashboard:github-at', 'life-dashboard:github-repos', 'life-dashboard:github-token']);
     clearToken();
-    expect(store.size).toBe(0);
+    expect([...store.keys()]).toEqual(['life-dashboard:github-at']); // only the time of the change is left
+    expect(loadToken()).toBe('');
     expect(loadChoices()).toEqual([]);
   });
   it('reads back only sensible repository choices', () => {
@@ -232,11 +233,11 @@ describe('the token stays on this device', () => {
   const sources = files('src').filter((f) => /\.tsx?$/.test(f) && !f.includes('__tests__'));
   const importers = sources.filter((f) => /from '(\.\.?\/)+githubPrivate'/.test(readFileSync(f, 'utf8')));
 
-  it('only the screens that save, use or erase it can reach it', () => {
-    expect(importers.sort()).toEqual(['src/components/Career.tsx', 'src/components/PrivateGitHub.tsx', 'src/components/Settings.tsx']);
+  it('only the screens that save, use or erase it, and the two files that carry it to the cloud copy, can reach it', () => {
+    expect(importers.sort()).toEqual(['src/cloud/secrets.ts', 'src/components/Career.tsx', 'src/components/PrivateGitHub.tsx', 'src/components/Settings.tsx', 'src/githubSync.ts']);
   });
   it('the code that builds backups, cloud copies, the advisor’s summary and push schedules cannot read it', () => {
-    for (const f of ['src/ai.ts', 'src/advisorData.ts', 'src/push.ts', 'src/pushEvents.ts', 'src/pushPreview.ts', 'src/sync.ts', 'src/repository.ts', 'src/sanitize.ts', 'src/merge.ts', 'src/cloud/engine.ts', 'src/cloud/api.ts', 'src/cloud/CloudProvider.tsx', 'api/push.ts']) {
+    for (const f of ['src/ai.ts', 'src/advisorData.ts', 'src/push.ts', 'src/pushEvents.ts', 'src/pushPreview.ts', 'src/sync.ts', 'src/repository.ts', 'src/sanitize.ts', 'src/merge.ts', 'src/cloud/engine.ts', 'src/cloud/api.ts', 'api/push.ts']) {
       const text = readFileSync(f, 'utf8');
       expect(text, f).not.toMatch(/github-token|githubPrivate|loadToken/);
     }

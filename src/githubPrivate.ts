@@ -10,6 +10,8 @@ import { addDays, todayKey, toKey } from './utils';
 
 const TOKEN_SLOT = 'life-dashboard:github-token';
 const REPOS_SLOT = 'life-dashboard:github-repos';
+/** When the token or the chosen repositories last changed on this device (or arrived from the cloud copy). Decides which copy is newer. */
+const STAMP_SLOT = 'life-dashboard:github-at';
 
 export const MAX_REPOS = 10;
 export const MAX_BRANCHES = 10;
@@ -26,7 +28,7 @@ export interface RepoChoice {
 
 const REPO_SHAPE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 /** "owner/name", and neither half may be only dots: "../x" would otherwise reach a different GitHub address. */
-const isRepo = (n: string): boolean => REPO_SHAPE.test(n) && n.split('/').every((p) => !/^\.+$/.test(p));
+export const isRepo = (n: string): boolean => REPO_SHAPE.test(n) && n.split('/').every((p) => !/^\.+$/.test(p));
 
 /** The two token shapes GitHub issues for people: fine-grained (github_pat_) and classic (ghp_). */
 export const looksLikeToken = (t: string): boolean => /^(github_pat_[A-Za-z0-9_]{20,255}|gh[pousr]_[A-Za-z0-9]{20,255})$/.test(t.trim());
@@ -50,11 +52,24 @@ const write = (k: string, v: string | null): boolean => {
 };
 
 export const loadToken = (): string => read(TOKEN_SLOT);
-export const saveToken = (t: string): boolean => write(TOKEN_SLOT, t.trim());
+export const loadStamp = (): string => read(STAMP_SLOT);
+const touch = () => void write(STAMP_SLOT, new Date().toISOString());
+export const saveToken = (t: string): boolean => {
+  const ok = write(TOKEN_SLOT, t.trim());
+  if (ok) touch();
+  return ok;
+};
 /** Forgets the token and the repositories chosen with it. (It stays valid at GitHub until it is revoked there.) */
 export function clearToken(): void {
   write(TOKEN_SLOT, null);
   write(REPOS_SLOT, null);
+  touch();
+}
+/** Puts in place a token and choices that arrived from the cloud copy, keeping the time they were made rather than "now". */
+export function adoptToken(token: string, repos: RepoChoice[], at: string): boolean {
+  const ok = write(TOKEN_SLOT, token) && write(REPOS_SLOT, JSON.stringify(repos.slice(0, MAX_REPOS)));
+  if (ok) write(STAMP_SLOT, at);
+  return ok;
 }
 
 export function loadChoices(): RepoChoice[] {
@@ -71,7 +86,11 @@ export function loadChoices(): RepoChoice[] {
     return [];
   }
 }
-export const saveChoices = (c: RepoChoice[]): boolean => write(REPOS_SLOT, JSON.stringify(c.slice(0, MAX_REPOS)));
+export const saveChoices = (c: RepoChoice[]): boolean => {
+  const ok = write(REPOS_SLOT, JSON.stringify(c.slice(0, MAX_REPOS)));
+  if (ok) touch();
+  return ok;
+};
 
 // ---------- talking to GitHub ----------
 

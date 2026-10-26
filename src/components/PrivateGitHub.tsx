@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useCloud } from '../cloud/CloudProvider';
+import { setSyncEnabled, syncEnabled } from '../githubSync';
 import { GitHubError } from '../github';
 import { MAX_REPOS, checkToken, clearToken, listRepos, loadChoices, loadToken, looksLikeToken, maskToken, saveChoices, saveToken } from '../githubPrivate';
 import type { RepoChoice, RepoInfo } from '../githubPrivate';
@@ -10,7 +12,24 @@ export function PrivateGitHub({ onChanged }: { onChanged: () => void }) {
   const [choices, setChoices] = useState<RepoChoice[]>(loadChoices);
   const [available, setAvailable] = useState<RepoInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const cloud = useCloud();
+  const signedIn = cloud.configured && !!cloud.email;
+  const [keep, setKeep] = useState(syncEnabled);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error' | 'note'; text: string }>({ kind: 'note', text: '' });
+
+  // A sync may have brought a token (or a removal of it) from another device.
+  useEffect(() => {
+    setToken(loadToken());
+    setChoices(loadChoices());
+    onChanged();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloud.lastSynced]);
+
+  /** Something changed here: tell the parent, and if the token is kept in the cloud copy, send the change along. */
+  const changed = () => {
+    onChanged();
+    if (keep && signedIn) cloud.syncNow();
+  };
 
   const fail = (e: unknown) => setMsg({ kind: 'error', text: e instanceof GitHubError ? e.message : 'Something went wrong. Try again.' });
 
@@ -35,7 +54,7 @@ export function PrivateGitHub({ onChanged }: { onChanged: () => void }) {
           ? `Saved for ${who.login}, but this classic token can also change your code, not only read it. Replace it with a fine-grained token that has Contents: Read-only.`
           : `Saved. It belongs to ${who.login}.`,
       });
-      onChanged();
+      changed();
     } catch (e) {
       fail(e);
     } finally {
@@ -60,7 +79,7 @@ export function PrivateGitHub({ onChanged }: { onChanged: () => void }) {
   const update = (next: RepoChoice[]) => {
     setChoices(next);
     saveChoices(next);
-    onChanged();
+    changed();
   };
   const toggleRepo = (name: string, on: boolean) => {
     if (on && choices.length >= MAX_REPOS) {
@@ -81,7 +100,7 @@ export function PrivateGitHub({ onChanged }: { onChanged: () => void }) {
           <b>What it can see.</b> Whatever you give it access to, nothing else. Make a <b>fine-grained</b> token at github.com/settings/personal-access-tokens, choose <b>Only select repositories</b>, and set <b>Contents: Read-only</b>. A read-only token cannot change anything.
         </li>
         <li>
-          <b>Where it stays.</b> In this browser on this device only, like your AI keys. It is not in backups or downloads, the cloud copy, the advisor’s summary or the push server, and it is sent only to GitHub.
+          <b>Where it stays.</b> In this browser on this device, like your AI keys. It is not in backups or downloads, the advisor’s summary or the push server, and it is sent only to GitHub. It goes into your cloud copy only if you switch that on below.
         </li>
         <li>
           <b>Revoking it.</b> “Remove” below forgets it here. To make it stop working everywhere, delete it at github.com/settings/personal-access-tokens (or Tokens (classic)).
@@ -104,8 +123,8 @@ export function PrivateGitHub({ onChanged }: { onChanged: () => void }) {
               setToken('');
               setChoices([]);
               setAvailable(null);
-              setMsg({ kind: 'note', text: 'Removed from this device. Revoke it at GitHub too if you won’t use it again.' });
-              onChanged();
+              setMsg({ kind: 'note', text: keep && signedIn ? 'Removed from this device and from your cloud copy. Other devices keep theirs until you remove it there. Revoke it at GitHub too if you won’t use it again.' : 'Removed from this device. Revoke it at GitHub too if you won’t use it again.' });
+              changed();
             }}
           >
             Remove
@@ -128,6 +147,34 @@ export function PrivateGitHub({ onChanged }: { onChanged: () => void }) {
           </button>
         </form>
       )}
+
+      {signedIn ? (
+        <div className="keep-cloud">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={keep}
+              onChange={(e) => {
+                setSyncEnabled(e.target.checked);
+                setKeep(e.target.checked);
+                cloud.syncNow();
+                setMsg({
+                  kind: 'note',
+                  text: e.target.checked
+                    ? 'Kept in your cloud copy. Switch this on in the app on your other devices to use it there.'
+                    : 'Removing it from your cloud copy. Your other devices keep what they already have.',
+                });
+              }}
+            />
+            <span>
+              <b>Keep it in my encrypted cloud copy</b>{' '}
+              <small className="muted-s">so my other devices can use it. Sealed on this device with your passphrase before it is uploaded, like the rest of your data; the server cannot read it. Never in downloaded backups.</small>
+            </span>
+          </label>
+        </div>
+      ) : cloud.configured ? (
+        <p className="note">To use the same token on your other devices, sign in under Settings → Sync and backup, then come back here.</p>
+      ) : null}
 
       {token && choices.length > 0 && !available && (
         <p className="note">
