@@ -17,9 +17,12 @@ export interface CommitSync {
   since: string;
   /** Days from this date on are complete; earlier days in the window may be partial. */
   completeFrom: string;
+  /** The commits counted, so a later look at private repositories does not count the same one twice. */
+  shas?: string[];
 }
 
 interface SearchItem {
+  sha?: string;
   commit?: { author?: { date?: string } };
   repository?: { full_name?: string };
 }
@@ -45,6 +48,7 @@ export async function fetchCommits(rawUser: string, fetchImpl: typeof fetch = fe
   let total = 0;
   let available = 0;
   let oldest: string | null = null;
+  const shas: string[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     let res: Response;
@@ -77,6 +81,7 @@ export async function fetchCommits(rawUser: string, fetchImpl: typeof fetch = fe
       const k = toKey(d);
       byDate[k] = (byDate[k] ?? 0) + 1;
       total++;
+      if (typeof it.sha === 'string') shas.push(it.sha);
       if (it.repository?.full_name) repos.add(it.repository.full_name);
       if (oldest == null || k < oldest) oldest = k;
     }
@@ -86,7 +91,7 @@ export async function fetchCommits(rawUser: string, fetchImpl: typeof fetch = fe
   const truncated = available > total;
   // The oldest day we read may have more commits we never reached, so only trust days after it.
   const completeFrom = truncated && oldest ? addDays(oldest, 1) : since;
-  return { byDate, repos: [...repos].sort(), total, truncated, since, completeFrom };
+  return { byDate, repos: [...repos].sort(), total, truncated, since, completeFrom, shas };
 }
 
 /**

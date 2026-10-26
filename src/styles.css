@@ -668,3 +668,11 @@ textarea:focus-visible { outline-offset: 0; border-color: var(--chalk); }
 .photo-view { margin-top: 14px; max-width: 520px; display: grid; gap: 6px; justify-items: start; }
 .photo-wait { aspect-ratio: 3 / 4; border-radius: 8px; background: var(--steel-2); border: 1px solid var(--line); }
 figcaption { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+.private-gh { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.private-gh summary { cursor: pointer; color: var(--chalk); font-size: 15px; }
+.private-gh .note-list { color: var(--muted); font-size: 14px; margin: 8px 0 12px 18px; display: grid; gap: 6px; max-width: 62ch; }
+.private-gh code { background: var(--steel-2); padding: 1px 6px; border-radius: 4px; }
+.private-gh .repo-pick { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; margin-top: 10px; min-width: 0; }
+.private-gh .repo-pick legend { padding: 0 6px; color: var(--muted); font-size: 14px; }
+.private-gh .repo-pick .row { grid-template-columns: 1fr auto; }
