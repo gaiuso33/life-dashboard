@@ -10,6 +10,7 @@ import { forgetKeys, recallKey, rememberKey } from './keystore';
 import { getProgram } from '../program';
 import { currentSubscription, refreshPush, unsubscribeThisDevice } from '../push';
 import { buildEventItems } from '../pushEvents';
+import { applySecrets, localSecrets, syncDone } from '../githubSync';
 import { loadReminders } from '../reminders';
 import type { PushRow } from '../push';
 import type { ServerRow } from '../pushPreview';
@@ -155,7 +156,7 @@ export function CloudProvider({ children }: { children: ReactNode }) {
     setStatus('syncing');
     setError('');
     try {
-      const res = await syncOnce(api, keys, latest.current);
+      const res = await syncOnce(api, keys, latest.current, localSecrets());
       if (res.status === 'locked') {
         if (res.reason === 'wrong') {
           keyCache.current.clear();
@@ -172,6 +173,8 @@ export function CloudProvider({ children }: { children: ReactNode }) {
       } else {
         locked.current = false;
         setLock(null);
+        applySecrets(res.secrets);
+        syncDone();
         // Edits made while the request was in flight are merged, not overwritten.
         const next = mergeData(latest.current, res.data);
         if (stable(next) !== stable(latest.current)) importData(next);

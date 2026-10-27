@@ -676,3 +676,6 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .private-gh .repo-pick { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; margin-top: 10px; min-width: 0; }
 .private-gh .repo-pick legend { padding: 0 6px; color: var(--muted); font-size: 14px; }
 .private-gh .repo-pick .row { grid-template-columns: 1fr auto; }
+
+.private-gh .keep-cloud { margin-top: 12px; }
+.private-gh .keep-cloud .check { align-items: flex-start; }
