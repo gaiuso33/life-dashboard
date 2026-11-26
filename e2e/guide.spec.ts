@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
-import { APP, DESKTOP, expectNoA11yViolations, newDevice, setUpEmptyDashboard } from './helpers';
+import { APP, DESKTOP, expectNoA11yViolations, newDevice, setUpEmptyDashboard, openTab } from './helpers';
 
 test('a new person gets a checklist that ticks itself, and reminders download as a calendar file', async ({ browser }) => {
   const { ctx, page, errors } = await newDevice(browser, DESKTOP, APP);
@@ -17,7 +17,7 @@ test('a new person gets a checklist that ticks itself, and reminders download as
   await page.getByRole('textbox', { name: 'Amount', exact: true }).fill('1500');
   await page.getByRole('radio', { name: 'Food' }).click();
   await page.getByRole('button', { name: 'Save entry' }).click();
-  await page.getByRole('button', { name: 'Today' }).first().click();
+  await openTab(page, 'Today');
   await expect(page.locator('.guide .row.is-done')).not.toHaveCount(0);
 
   // reminders
@@ -36,7 +36,7 @@ test('a new person gets a checklist that ticks itself, and reminders download as
   await expect(page.getByRole('status').filter({ hasText: 'Add All' })).toBeVisible();
 
   // the step is now done, and the checklist can be hidden for good
-  await page.getByRole('button', { name: 'Today' }).first().click();
+  await openTab(page, 'Today');
   await expect(guide.getByText('Set up reminders')).toBeVisible();
   await expect(guide.locator('.row.is-done', { hasText: 'Set up reminders' })).toHaveCount(1);
   await guide.getByRole('button', { name: 'Hide this' }).click();

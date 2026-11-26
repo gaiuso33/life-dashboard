@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import path from 'path';
-import { expectNoA11yViolations, newDevice, PHONE, setUpEmptyDashboard, stored } from './helpers';
+import { expectNoA11yViolations, newDevice, PHONE, setUpEmptyDashboard, stored, openTab } from './helpers';
 
 const fixture = (name: string) => path.join(import.meta.dirname, 'fixtures', name);
 const openImport = async (page: Page) => {
-  await page.getByRole('button', { name: 'Money', exact: true }).first().click();
+  await openTab(page, 'Money');
   await page.getByRole('button', { name: 'Import a statement' }).click();
   await expect(page.getByRole('dialog', { name: 'Import a statement' })).toBeVisible();
 };

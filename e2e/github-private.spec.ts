@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { APP, DESKTOP, PHONE, expectNoA11yViolations, newContext, setUpEmptyDashboard } from './helpers';
+import { APP, DESKTOP, PHONE, expectNoA11yViolations, newContext, setUpEmptyDashboard, openTab } from './helpers';
 
 // Private repositories and other branches through a read-only token. GitHub is played by the test; the browser still applies the
 // page's security policy first, so this also proves the policy lets api.github.com through with an Authorization header.
@@ -39,7 +39,7 @@ async function mockGitHub(page: Page, opts: { scopes?: string; badToken?: boolea
 }
 
 const goToCareer = async (p: Page) => {
-  await p.getByRole('button', { name: 'Career' }).last().click();
+  await openTab(p, 'Career');
   await p.getByRole('heading', { name: 'GitHub activity' }).waitFor();
 };
 const panel = (p: Page) => p.locator('.private-gh');
@@ -183,7 +183,7 @@ test('a classic token that can change code is flagged; erasing the device forget
 
   const demo = await ctx.newPage();
   await demo.goto(APP + '?demo');
-  await demo.getByRole('button', { name: 'Career' }).last().click();
+  await openTab(demo, 'Career');
   await demo.getByRole('heading', { name: 'GitHub activity' }).waitFor();
   await expect(demo.locator('.private-gh')).toHaveCount(0);
   expect(errors).toEqual([]);

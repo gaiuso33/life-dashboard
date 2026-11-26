@@ -2,13 +2,13 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
-import { APP, expectNoA11yViolations, inspectPicture, newContext, newDevice, PHONE, setUpEmptyDashboard, storedPhotos } from './helpers';
+import { APP, expectNoA11yViolations, inspectPicture, newContext, newDevice, PHONE, setUpEmptyDashboard, storedPhotos, openTab } from './helpers';
 
 const FRONT = path.join(import.meta.dirname, 'fixtures', 'photo-front.jpg');
 const SIDE = path.join(import.meta.dirname, 'fixtures', 'photo-side.jpg');
 const NOT_A_PHOTO = path.join(import.meta.dirname, 'fixtures', 'not-a-photo.jpg');
 
-const goBody = (page: Page) => page.getByRole('button', { name: 'Body', exact: true }).first().click();
+const goBody = (page: Page) => openTab(page, 'Body');
 const panel = (page: Page) => page.locator('section[aria-labelledby="photos-title"]');
 /** Adds a picture on the Body screen with a date and a note, and waits until it is saved. */
 const add = async (page: Page, file: string, date: string, note = '') => {

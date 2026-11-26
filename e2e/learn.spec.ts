@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import path from 'path';
-import { expectNoA11yViolations, newDevice, setUpEmptyDashboard, stored } from './helpers';
+import { expectNoA11yViolations, newDevice, setUpEmptyDashboard, stored, openTab } from './helpers';
 
-const goMoney = (page: Page) => page.getByRole('button', { name: 'Money', exact: true }).first().click();
+const goMoney = (page: Page) => openTab(page, 'Money');
 const goSettings = (page: Page) => page.getByRole('button', { name: 'Settings' }).last().click();
 const spend = async (page: Page, amount: string, note: string, category: string) => {
   await page.getByLabel('Amount', { exact: true }).fill(amount);
@@ -95,7 +95,7 @@ test('the savings forecast leaves out a one-off, says what it used and shows how
   // The page saves its own state as it unloads, so the history is put in place as the next page starts instead.
   await ctx.addInitScript(([k, v]) => localStorage.setItem(k, v), ['life-dashboard:v1', JSON.stringify(d)]);
   await page.reload();
-  await page.getByRole('button', { name: 'Advisor', exact: true }).first().click();
+  await openTab(page, 'Advisor');
   const card = page.locator('.forecasts li', { hasText: 'Survival fund' });
   await expect(card).toContainText('saving about ₦20,000 a month over the last 6 full months');
   await expect(card).toContainText('Left out a one-off income of ₦2,000,000');

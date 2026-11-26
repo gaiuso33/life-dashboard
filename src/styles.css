@@ -151,6 +151,7 @@ ul, ol { list-style: none; }
   transition: background 120ms, border-color 120ms;
 }
 .btn:hover { background: var(--steel-3); }
+@media (max-width: 420px) { .btn { white-space: normal; max-width: 100%; } }
 .btn[aria-pressed='true'] { background: transparent; border-color: var(--plate-green); color: var(--plate-green); }
 .btn.primary { background: var(--chalk); color: var(--ink); border-color: var(--chalk); font-weight: 600; }
 .btn.primary:hover { background: var(--primary-hover); }
@@ -466,7 +467,7 @@ select:hover { border-color: var(--steel-3); }
 .stats dd.long { font-size: 22px; line-height: 1.2; padding-top: 8px; }
 
 /* ---------- month ---------- */
-.month-nav { display: flex; gap: 8px; margin-bottom: 14px; }
+.month-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .month-stats { margin-bottom: 18px; }
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-h { color: var(--muted); font-size: 12px; text-align: center; padding: 2px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
@@ -604,7 +605,7 @@ select:hover { border-color: var(--steel-3); }
 .tour .row-action { grid-column: auto; justify-content: flex-start; }
 .tour p { margin: 0; color: var(--muted); font-size: 14px; }
 .tour .tour-count { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
-@media (max-width: 560px) { .tour { right: 8px; left: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; } }
+@media (max-width: 560px) { .tour { right: 8px; left: 8px; bottom: calc(130px + env(safe-area-inset-bottom)); width: auto; } }
 
 /* AI provider choice */
 .field select { min-height: 40px; width: 100%; color: var(--chalk); font-size: 16px; padding: 8px 10px; border-color: var(--steel-3); }
@@ -697,6 +698,7 @@ textarea:focus-visible { outline-offset: 0; border-color: var(--chalk); }
 .app { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 900px) { .app { grid-template-columns: 224px minmax(0, 1fr); } }
 .main, .page, .settings, .settings > .panel { min-width: 0; }
+.page > * { min-width: 0; }
 .settings { grid-template-columns: minmax(0, 1fr); }
 
 /* The setup card is one column. A phone rule that puts every action row in column 2 must not split the card into two. */

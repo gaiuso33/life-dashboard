@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, Page } from '@playwright/test';
-import { APP, newContext, stored } from './helpers';
+import { APP, newContext, stored, openTab } from './helpers';
 
 // Currency and weight follow the person's location (timezone, then browser language) and can be changed. Amounts are relabelled,
 // never converted; weights are stored in kilograms and shown in the chosen unit.
@@ -42,7 +42,7 @@ test('someone in the United States gets dollars and pounds, and what they type i
   expect(((await stored(page)) as { goalWeight: number }).goalWeight).toBeCloseTo(74.84, 1);
 
   // the Body screen speaks pounds
-  await page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await openTab(page, 'Body');
   await expect(page.getByText('Weight (lb)')).toBeVisible();
   await expect(page.getByText('165 lb').first()).toBeVisible();
 
@@ -55,7 +55,7 @@ test('someone in the United States gets dollars and pounds, and what they type i
   await expect(page.getByRole('cell', { name: '34 in' })).toBeVisible();
 
   // money is in dollars
-  await page.getByRole('button', { name: 'Money', exact: true }).first().click();
+  await openTab(page, 'Money');
   await page.getByRole('textbox', { name: 'Amount', exact: true }).fill('1500');
   await page.getByRole('radio', { name: 'Food' }).click();
   await page.getByRole('button', { name: 'Save entry' }).click();
@@ -65,27 +65,27 @@ test('someone in the United States gets dollars and pounds, and what they type i
   // changing the currency relabels the same amount; it does not convert it
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('combobox', { name: /^Currency/ }).selectOption('GBP');
-  await page.getByRole('button', { name: 'Money', exact: true }).first().click();
+  await openTab(page, 'Money');
   await expect(page.locator('.txn-amt').first()).toHaveText('−£1,500');
   await expect.poll(async () => ((await stored(page)) as { money: { txns: { amount: number }[] } }).money.txns[0]?.amount).toBe(1500);
 
   // and the weight unit switch is exact and keeps the stored kilograms
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('combobox', { name: /^Weight/ }).selectOption('kg');
-  await page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await openTab(page, 'Body');
   await expect(page.getByText('Weight (kg)')).toBeVisible();
   await expect(page.getByText('74.8 kg').first()).toBeVisible();
   await expect(page.getByText('Waist (in)')).toBeVisible(); // the weight unit and the measurement unit are separate choices
   await page.getByRole('button', { name: 'Settings' }).first().click();
   await page.getByRole('combobox', { name: /^Body measurements/ }).selectOption('cm');
-  await page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await openTab(page, 'Body');
   await expect(page.getByRole('cell', { name: '86.4 cm' })).toBeVisible();
   expect(((await stored(page)) as { body: { m: { waist?: number } }[] }).body.at(-1)?.m.waist).toBeCloseTo(86.36, 1);
   expect(((await stored(page)) as { body: { weight: number }[] }).body[0].weight).toBeCloseTo(68.95, 1); // 152 lb, replacing the same-day weigh-in
   await expect.poll(() => prefs(page)).toEqual({ currency: 'GBP', weightUnit: 'kg', lengthUnit: 'cm' });
 
   await page.reload();
-  await page.getByRole('button', { name: 'Money', exact: true }).first().click();
+  await openTab(page, 'Money');
   await expect(page.locator('.txn-amt').first()).toHaveText('−£1,500');
   expect(errors).toEqual([]);
   await ctx.close();
@@ -125,9 +125,9 @@ test('an existing save from before this setting keeps naira and kilograms even i
     localStorage.setItem('life-dashboard:v1', JSON.stringify(d));
   });
   await page.goto(APP);
-  await page.getByRole('button', { name: 'Money', exact: true }).first().click();
+  await openTab(page, 'Money');
   await expect(page.locator('.txn-amt').first()).toHaveText('−₦2,500');
-  await page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await openTab(page, 'Body');
   await expect(page.getByText('Weight (kg)')).toBeVisible();
   await ctx.close();
 });

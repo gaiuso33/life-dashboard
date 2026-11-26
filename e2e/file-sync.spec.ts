@@ -3,7 +3,7 @@
 // so a failure reports all the checks that broke, not just the first.
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
-import { APP, newContext } from './helpers';
+import { APP, newContext, openTab } from './helpers';
 
 test('file export, import and merge between devices', async ({ browser: b }, testInfo) => {
   test.setTimeout(150_000);
@@ -12,8 +12,8 @@ test('file export, import and merge between devices', async ({ browser: b }, tes
   const ok = (c: unknown, m: string) => expect.soft(!!c, m).toBe(true);
 const errs=[];
 const mk=async(vp)=>{const c=await newContext(b,{viewport:vp,acceptDownloads:true}); const p=await c.newPage(); p.on('pageerror',e=>errs.push(e.message)); p.on('dialog',d=>d.accept()); await p.goto(APP); await p.getByRole('button',{name:'Set up my dashboard'}).click(); for (let i=0;i<4;i++) await p.getByRole('button',{name:'Next',exact:true}).click(); await p.getByRole('button',{name:'Open my dashboard'}).click(); await p.waitForSelector('text=Today’s plates'); return p;};
-const addPlan=async(p,title)=>{await p.getByRole('button',{name:'Month'}).first().click(); await p.fill('input[placeholder^="Rent"]',title); await p.getByRole('button',{name:'Add',exact:true}).click();};
-const logSpend=async(p)=>{await p.getByRole('button',{name:'Today'}).first().click(); await p.getByRole('button',{name:'Spent nothing'}).click();};
+const addPlan=async(p,title)=>{await openTab(p, 'Month'); await p.fill('input[placeholder^="Rent"]',title); await p.getByRole('button',{name:'Add',exact:true}).click();};
+const logSpend=async(p)=>{await openTab(p, 'Today'); await p.getByRole('button',{name:'Spent nothing'}).click();};
 const openSync=async(p)=>{await p.getByRole('button',{name:'Sync and backup'}).last().click(); await p.waitForSelector('#sync-title');};
 const exportFrom=async(p,path)=>{await openSync(p); const [dl]=await Promise.all([p.waitForEvent('download'),p.getByRole('button',{name:'Download copy'}).click()]); await dl.saveAs(path); await p.getByRole('button',{name:'Close',exact:true}).click();};
 const A=await mk({width:1280,height:900}), P=await mk({width:390,height:844});
@@ -29,7 +29,7 @@ ok(await P.locator('.preview-box li',{hasText:'1 new planned item'}).isVisible()
 await P.screenshot({path:S+'sync-phone.png',fullPage:true});
 await P.getByRole('button',{name:'Merge',exact:true}).click(); await P.waitForSelector('text=Merged.');
 await P.getByRole('button',{name:'Close',exact:true}).click();
-await P.getByRole('button',{name:'Month'}).first().click();
+await openTab(P, 'Month');
 ok(await P.locator('.plan-list li',{hasText:'Phone task'}).isVisible()&&await P.locator('.plan-list li',{hasText:'Laptop task'}).isVisible(),'phone has both tasks');
 // phone deletes laptop task; laptop imports
 await P.locator('.plan-list li',{hasText:'Laptop task'}).getByRole('button',{name:'Delete'}).click();
@@ -38,7 +38,7 @@ await openSync(A); await A.setInputFiles('input[type=file]',S+'p.json'); await A
 ok(await A.locator('.preview-box').innerText().then(t=>t.includes('Phone task')||t.includes('1 new planned item')&&t.includes('deleted on the other device')),'laptop preview: new + deletion');
 await A.screenshot({path:S+'sync-laptop.png'});
 await A.getByRole('button',{name:'Merge',exact:true}).click(); await A.waitForSelector('text=Merged.'); await A.getByRole('button',{name:'Close',exact:true}).click();
-await A.getByRole('button',{name:'Month'}).first().click();
+await openTab(A, 'Month');
 ok(await A.locator('.plan-list li',{hasText:'Phone task'}).isVisible()&&await A.locator('.plan-list li',{hasText:'Laptop task'}).count()===0,'laptop got phone task, deletion honoured');
 // merging same file again changes nothing
 await openSync(A); await A.setInputFiles('input[type=file]',S+'p.json'); await A.waitForSelector('text=Nothing new in this file'); ok(true,'re-import shows nothing new');

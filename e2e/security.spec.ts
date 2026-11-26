@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { APP, newDevice, TABS } from './helpers';
+import { APP, newDevice, TABS , openTab } from './helpers';
 
 test('production security headers are sent and the app runs under them without violations', async ({ browser }) => {
   const { page, errors } = await newDevice(browser, undefined, 'about:blank');
@@ -44,13 +44,13 @@ test('the app loads its own fonts and makes no outside requests while in use', a
   });
   await page.goto(APP);
   await page.getByRole('button', { name: /sample data/i }).click();
-  for (const t of TABS) await page.getByRole('button', { name: t, exact: true }).first().click();
+  for (const t of TABS) await openTab(page, t);
   const fonts = await page.evaluate(async () => {
     await document.fonts.ready;
     const faces = [...document.fonts].map((f) => `${f.family.replace(/"/g, '')} ${f.weight} ${f.status}`);
-    return { faces, display: document.fonts.check('700 20px "Barlow Condensed"'), body: document.fonts.check('400 16px Barlow') };
+    return { faces, display: document.fonts.check('700 20px "DM Sans"'), body: document.fonts.check('400 16px "DM Sans"') };
   });
-  expect(fonts.faces.sort()).toEqual(['Barlow 400 loaded', 'Barlow 600 loaded', 'Barlow Condensed 600 loaded', 'Barlow Condensed 700 loaded']);
+  expect(fonts.faces.sort()).toEqual(['DM Sans 400 loaded', 'DM Sans 500 loaded', 'DM Sans 600 loaded', 'DM Sans 700 loaded']);
   expect(fonts.display && fonts.body).toBe(true);
   expect([...hosts]).toEqual(['localhost:4173']);
 });

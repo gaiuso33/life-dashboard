@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { APP, DESKTOP, PHONE, expectNoA11yViolations, newContext, setUpEmptyDashboard, stored } from './helpers';
+import { APP, DESKTOP, PHONE, expectNoA11yViolations, newContext, setUpEmptyDashboard, stored, openTab } from './helpers';
 
 // The optional weight for each exercise. Stored in kilograms, shown in the unit chosen in Settings. The clock is fixed at
 // Friday 9 Oct 2026; the default programme's Push day is Monday.
 
-const goTrain = (p: Page) => p.getByRole('button', { name: 'Train', exact: true }).first().click();
+const goTrain = (p: Page) => openTab(p, 'Train');
 const push = (p: Page) => p.getByRole('tab', { name: /Push/ }).click();
 const bench = (p: Page, unit: string) => p.getByLabel(`Barbell bench press, weight in ${unit}`);
 const todayBench = async (p: Page) => ((await stored(p)).sessions['2026-10-09|push'] ?? {}) as { kg?: Record<string, number>; reps?: Record<string, (number | null)[]> };
@@ -134,7 +134,7 @@ test('the training volume forecast becomes weight lifted once three weeks in a r
   });
   await ctx.addInitScript(([k, v]) => localStorage.setItem(k, v), ['life-dashboard:v1', JSON.stringify(d)]);
   await page.reload();
-  await page.getByRole('button', { name: 'Advisor', exact: true }).first().click();
+  await openTab(page, 'Advisor');
   const card = page.locator('.forecasts li', { hasText: 'Training volume' });
   await expect(card).toContainText('Weight lifted is rising, about 176 lb a week'); // 32 reps x 2.5 kg = 80 kg
   await expect(card).toContainText('3 finished weeks of reps times load');

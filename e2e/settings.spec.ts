@@ -3,7 +3,7 @@
 // so a failure reports all the checks that broke, not just the first.
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
-import { APP, newContext } from './helpers';
+import { APP, newContext, openTab } from './helpers';
 
 test('settings', async ({ browser: b }, testInfo) => {
   test.setTimeout(150_000);
@@ -26,23 +26,23 @@ ok(await page.locator('.err',{hasText:'same weekday'}).isVisible()&&await page.g
 await page.locator('.prog-day').first().locator('select').first().selectOption('2'); // Tuesday
 ok(await page.getByRole('button',{name:'Save programme'}).isEnabled(),'valid draft can be saved');
 await page.getByRole('button',{name:'Save programme'}).click();
-await page.getByRole('button',{name:'Train'}).first().click(); await page.locator('.tabs button',{hasText:'Push'}).click();
+await openTab(page, 'Train'); await page.locator('.tabs button',{hasText:'Push'}).click();
 await page.getByText('Flat barbell bench').first().waitFor(); ok(true,'Train shows renamed exercise');
 // Month shows push on a Tuesday
-await page.getByRole('button',{name:'Month'}).first().click();
+await openTab(page, 'Month');
 ok(await page.locator('.cal-d[aria-label^="Tuesday"] .sess',{hasText:'Push'}).count()>0&&await page.locator('.cal-d[aria-label^="Monday"] .sess',{hasText:'Push'}).count()===0,'calendar follows new weekday');
 // reload keeps it
-await page.waitForTimeout(500); await page.reload(); await page.getByRole('button',{name:'Train'}).first().click(); await page.locator('.tabs button',{hasText:'Push'}).click(); ok(await page.getByText('Flat barbell bench').first().isVisible(),'programme persists');
+await page.waitForTimeout(500); await page.reload(); await openTab(page, 'Train'); await page.locator('.tabs button',{hasText:'Push'}).click(); ok(await page.getByText('Flat barbell bench').first().isVisible(),'programme persists');
 // reset
 await page.getByRole('button',{name:'Settings'}).last().click(); await page.getByRole('button',{name:'Reset to the original'}).click();
-await page.getByRole('button',{name:'Train'}).first().click(); await page.locator('.tabs button',{hasText:'Push'}).click(); ok(await page.getByText('Barbell bench press').first().isVisible(),'reset restores original');
+await openTab(page, 'Train'); await page.locator('.tabs button',{hasText:'Push'}).click(); ok(await page.getByText('Barbell bench press').first().isVisible(),'reset restores original');
 // categories
 await page.getByRole('button',{name:'Settings'}).last().click();
 await page.fill('input[placeholder^="Tithes"]','Tithes'); await page.locator('.inline-add').first().getByRole('button',{name:'Add'}).click();
 ok(await page.locator('.cat-list input[value="Tithes"]').count()===1,'category added');
 await page.fill('input[placeholder^="Tithes"]','tithes'); ok(await page.locator('.err',{hasText:'already have'}).isVisible(),'duplicate (case-insensitive) blocked');
 // log a txn with the new category on Money and rename
-await page.getByRole('button',{name:'Money'}).first().click();
+await openTab(page, 'Money');
 ok(await page.getByRole('radio',{name:'Tithes'}).count()>0,'new category available in Money logger');
 // rewards
 await page.getByRole('button',{name:'Settings'}).last().click();
