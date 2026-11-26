@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { Browser, BrowserContext, Page } from '@playwright/test';
+import type { Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -53,6 +53,20 @@ export async function setUpEmptyDashboard(page: Page): Promise<void> {
 
 export const stored = (page: Page, key = 'life-dashboard:v1') => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || 'null'), key);
 export const TABS = ['Today', 'Month', 'Train', 'Money', 'Career', 'Rewards', 'Advisor', 'Body'] as const;
+
+const AREA_OF: Record<string, string> = { Today: 'Today', Month: 'Health', Train: 'Health', Body: 'Health', Money: 'Money', Career: 'Grow', Rewards: 'Grow' };
+/**
+ * Opens a screen the way a person would, on either layout: on a computer every screen is in the side bar; on a phone the bottom bar has four areas,
+ * so the area is opened first and then the screen's own tab. Advisor is the "Ask your coach" bar on a phone.
+ */
+export async function openTab(page: Page, name: string, how: 'click' | 'tap' = 'click'): Promise<void> {
+  const press = (l: Locator) => (how === 'tap' ? l.tap() : l.click());
+  const direct = page.getByRole('button', { name, exact: true }).first();
+  if (await direct.isVisible()) return press(direct);
+  if (name === 'Advisor') return press(page.getByRole('button', { name: 'Ask your coach…' }));
+  await press(page.getByRole('button', { name: AREA_OF[name], exact: true }).first());
+  await press(page.getByRole('button', { name, exact: true }).first());
+}
 
 export interface StoredPhoto {
   id: string;

@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { APP, expectNoA11yViolations, newDevice, PHONE, DESKTOP, setUpEmptyDashboard, TABS } from './helpers';
+import { APP, expectNoA11yViolations, newDevice, openTab, PHONE, DESKTOP, setUpEmptyDashboard, TABS } from './helpers';
 
 for (const [name, viewport] of [['desktop', DESKTOP], ['phone', PHONE]] as const) {
   test(`first run screens have no accessibility violations (${name})`, async ({ browser }) => {
@@ -13,7 +13,7 @@ for (const [name, viewport] of [['desktop', DESKTOP], ['phone', PHONE]] as const
     const { page } = await newDevice(browser, viewport);
     await setUpEmptyDashboard(page);
     for (const t of [...TABS, 'Settings'] as const) {
-      await page.getByRole('button', { name: t, exact: true }).first().click();
+      await openTab(page, t);
       await expectNoA11yViolations(page, `${t} (${name}, empty)`);
     }
   });
@@ -22,7 +22,7 @@ for (const [name, viewport] of [['desktop', DESKTOP], ['phone', PHONE]] as const
     const { page } = await newDevice(browser, viewport);
     await page.getByRole('button', { name: /sample data/i }).click();
     for (const t of TABS) {
-      await page.getByRole('button', { name: t, exact: true }).first().click();
+      await openTab(page, t);
       await expectNoA11yViolations(page, `${t} (${name}, sample)`);
     }
     await page.getByRole('button', { name: 'Sync and backup' }).first().click();
