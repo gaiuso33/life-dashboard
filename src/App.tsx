@@ -36,6 +36,18 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'body', label: 'Body', icon: 'M4 19h16v2H4v-2zM6 10h3v8H6v-8zm5-6h3v14h-3V4zm5 4h3v10h-3V8z' },
 ];
 
+/** What the phone's bottom bar shows: four areas. Each holds the screens that used to be separate tabs. */
+type AreaKey = 'today' | 'health' | 'money' | 'grow';
+const AREAS: { key: AreaKey; label: string; tabs: Tab[]; icon: string }[] = [
+  { key: 'today', label: 'Today', tabs: ['today'], icon: TABS[0].icon },
+  { key: 'health', label: 'Health', tabs: ['train', 'body', 'month'], icon: 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' },
+  { key: 'money', label: 'Money', tabs: ['money'], icon: TABS[3].icon },
+  { key: 'grow', label: 'Grow', tabs: ['career', 'rewards'], icon: 'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z' },
+];
+const TAB_LABEL = Object.fromEntries(TABS.map((t) => [t.key, t.label])) as Record<Tab, string>;
+const areaOf = (t: Tab): AreaKey | null => AREAS.find((a) => a.tabs.includes(t))?.key ?? null;
+const ADVISOR_ICON = TABS.find((t) => t.key === 'advisor')!.icon;
+
 function initialTrainView(): TrainView {
   const today = todayKey();
   return plannedFor(today) ?? nextSession(addDays(today, 1)).day;
@@ -48,6 +60,8 @@ export function App() {
   const updateReady = useUpdateReady();
   const [syncOpen, setSyncOpen] = useState(!!cloud.resetToken);
   const [tab, setTab] = useState<Tab>('today');
+  // The screen last opened in each area, so tapping an area returns to where you were.
+  const [lastIn, setLastIn] = useState<Partial<Record<AreaKey, Tab>>>({});
   const [tour, setTour] = useState<number | null>(tourWanted ? 0 : null);
   const [view, setView] = useState<TrainView>(initialTrainView);
 
@@ -65,8 +79,13 @@ export function App() {
   const go = (t: Tab, v?: TrainView) => {
     if (v) setView(v);
     setTab(t);
+    const a = areaOf(t);
+    if (a) setLastIn((m) => ({ ...m, [a]: t }));
     window.scrollTo({ top: 0 });
   };
+
+  const area = areaOf(tab);
+  const areaDef = AREAS.find((a) => a.key === area);
 
   return (
     <div className="app">
@@ -103,81 +122,116 @@ export function App() {
       </aside>
 
       <main className="main">
-        {updateReady && (
-          <div className="banner update" role="status">
-            <p>
-              <b>A new version is ready.</b> Reload to use it. Everything you have logged is kept.
-            </p>
-            <button className="btn primary" onClick={() => window.location.reload()}>
-              Update now
-            </button>
-          </div>
-        )}
-        {saveFailed && (
-          <div className="banner warn" role="alert">
-            <p>Your latest changes couldn’t be saved on this device. Storage may be full, or the browser may be blocking it (private windows do this). Download a copy so nothing is lost.</p>
-            <button className="btn" onClick={() => setSyncOpen(true)}>
-              Download a copy
-            </button>
-          </div>
-        )}
-        <div className="topbar">
-          <CloudBadge />
-          {!cloud.email && !data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
-          <button className="link-btn" onClick={() => go('settings')}>
-            Settings
-          </button>
-          {!isDemo && (
-            <button className="link-btn" onClick={() => setSyncOpen(true)}>
-              Sync and backup
-            </button>
-          )}
-        </div>
-        {isDemo && (
-          <div className="banner demo" role="status">
-            <p>
-              <b>Demo.</b> Made-up data. Nothing is saved or uploaded, and reloading resets it.
-            </p>
-            <div className="row-action">
-              {tour === null && (
-                <button className="btn" onClick={() => setTour(0)}>
-                  Take the tour
-                </button>
-              )}
-              <button className="btn" onClick={() => window.location.reload()}>
-                Reset demo
-              </button>
-              <button className="btn primary" onClick={leaveDemo}>
-                Start my own
+        <div className="notices">
+          {updateReady && (
+            <div className="banner update" role="status">
+              <p>
+                <b>A new version is ready.</b> Reload to use it. Everything you have logged is kept.
+              </p>
+              <button className="btn primary" onClick={() => window.location.reload()}>
+                Update now
               </button>
             </div>
-          </div>
-        )}
-        {data.sample && !isDemo && (
-          <div className="banner" role="status">
-            <p>You’re looking at sample data. Start fresh to log your own.</p>
-            <button
-              className="btn"
-              onClick={() => {
-                if (window.confirm('Remove the sample data and start with an empty dashboard?')) dispatch({ t: 'fresh' });
-              }}
-            >
-              Start fresh
+          )}
+          {saveFailed && (
+            <div className="banner warn" role="alert">
+              <p>Your latest changes couldn’t be saved on this device. Storage may be full, or the browser may be blocking it (private windows do this). Download a copy so nothing is lost.</p>
+              <button className="btn" onClick={() => setSyncOpen(true)}>
+                Download a copy
+              </button>
+            </div>
+          )}
+          {isDemo && (
+            <div className="banner demo" role="status">
+              <p>
+                <b>Demo.</b> Made-up data. Nothing is saved or uploaded, and reloading resets it.
+              </p>
+              <div className="row-action">
+                {tour === null && (
+                  <button className="btn" onClick={() => setTour(0)}>
+                    Take the tour
+                  </button>
+                )}
+                <button className="btn" onClick={() => window.location.reload()}>
+                  Reset demo
+                </button>
+                <button className="btn primary" onClick={leaveDemo}>
+                  Start my own
+                </button>
+              </div>
+            </div>
+          )}
+          {data.sample && !isDemo && (
+            <div className="banner" role="status">
+              <p>You’re looking at sample data. Start fresh to log your own.</p>
+              <button
+                className="btn"
+                onClick={() => {
+                  if (window.confirm('Remove the sample data and start with an empty dashboard?')) dispatch({ t: 'fresh' });
+                }}
+              >
+                Start fresh
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="band">
+          <div className="topbar">
+            <CloudBadge />
+            {!cloud.email && !data.sample && daysAgo(lastExport()) !== 0 && <span className="muted-s">Last backup: {agoText(daysAgo(lastExport()))}</span>}
+            <button className="link-btn" onClick={() => go('settings')}>
+              Settings
             </button>
+            {!isDemo && (
+              <button className="link-btn" onClick={() => setSyncOpen(true)}>
+                Sync and backup
+              </button>
+            )}
           </div>
-        )}
-        <ErrorBoundary inline key={tab}>
-          {tab === 'today' && <Today go={go} onSync={() => setSyncOpen(true)} />}
-          {tab === 'month' && <Month />}
-          {tab === 'train' && <Train view={view} setView={setView} />}
-          {tab === 'money' && <Money />}
-          {tab === 'career' && <Career />}
-          {tab === 'rewards' && <Rewards />}
-          {tab === 'advisor' && <Advisor go={go} />}
-          {tab === 'body' && <Body />}
-          {tab === 'settings' && <Settings go={go} onSync={() => setSyncOpen(true)} />}
-        </ErrorBoundary>
+          {areaDef && areaDef.tabs.length > 1 && (
+            <div className="subtabs" role="group" aria-label={`${areaDef.label} sections`}>
+              {areaDef.tabs.map((t) => (
+                <button key={t} type="button" aria-current={tab === t ? 'page' : undefined} onClick={() => go(t)}>
+                  {TAB_LABEL[t]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="content">
+          <ErrorBoundary inline key={tab}>
+            {tab === 'today' && <Today go={go} onSync={() => setSyncOpen(true)} />}
+            {tab === 'month' && <Month />}
+            {tab === 'train' && <Train view={view} setView={setView} />}
+            {tab === 'money' && <Money />}
+            {tab === 'career' && <Career />}
+            {tab === 'rewards' && <Rewards />}
+            {tab === 'advisor' && <Advisor go={go} />}
+            {tab === 'body' && <Body />}
+            {tab === 'settings' && <Settings go={go} onSync={() => setSyncOpen(true)} />}
+          </ErrorBoundary>
+        </div>
       </main>
+      <div className="dock">
+        {tab !== 'advisor' && (
+          <button type="button" className="coach-bar" onClick={() => go('advisor')}>
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path d={ADVISOR_ICON} fill="currentColor" />
+            </svg>
+            Ask your coach…
+          </button>
+        )}
+        <nav aria-label="Areas">
+          {AREAS.map((a) => (
+            <button key={a.key} className="nav-btn" aria-current={area === a.key ? 'page' : undefined} onClick={() => go(lastIn[a.key] ?? a.tabs[0])}>
+              <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                <path d={a.icon} fill="currentColor" />
+              </svg>
+              <span>{a.label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
       {syncOpen && <Sync onClose={() => setSyncOpen(false)} />}
       {tour !== null && <DemoTour step={tour} setStep={setTour} go={go} onClose={() => setTour(null)} />}
     </div>
