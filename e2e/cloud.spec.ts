@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
 import path from 'path';
-import { CLOUD_APP, DESKTOP, expectNoA11yViolations, MOCK, setUpEmptyDashboard, stored, storedPhotos, newContext } from './helpers';
+import { CLOUD_APP, DESKTOP, expectNoA11yViolations, MOCK, setUpEmptyDashboard, stored, storedPhotos, newContext, openTab } from './helpers';
 
 // Cloud sync against the local mock of Supabase (e2e/mock-server.mjs). The tests share two "devices" and run in order.
 test.describe.configure({ mode: 'serial' });
@@ -145,7 +145,7 @@ test('edits travel in both directions and concurrent edits converge', async () =
 test('a progress photo stays on the device it was taken on: not in the cloud copy, not in any request, not on the other device', async () => {
   const sent: { url: string; size: number }[] = [];
   L.page.on('request', (r) => sent.push({ url: r.url(), size: (r.postData() ?? '').length }));
-  await L.page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await openTab(L.page, 'Body');
   const panel = L.page.locator('section[aria-labelledby="photos-title"]');
   await panel.getByLabel('Choose a picture from this device').setInputFiles(path.join(import.meta.dirname, 'fixtures', 'photo-front.jpg'));
   await expect(panel.getByRole('status')).toContainText('Photo saved on this device');
@@ -154,7 +154,7 @@ test('a progress photo stays on the device it was taken on: not in the cloud cop
 
   // make the laptop upload again, by changing something
   const before = (await admin()).vaults[0];
-  await L.page.getByRole('button', { name: 'Today', exact: true }).first().click();
+  await openTab(L.page, 'Today');
   await L.page.getByRole('button', { name: '4', exact: true }).first().click();
   await expect.poll(async () => (await admin()).vaults[0].version, { timeout: 30_000 }).toBeGreaterThan(before.version);
   const after = (await admin()).vaults[0];
@@ -167,10 +167,10 @@ test('a progress photo stays on the device it was taken on: not in the cloud cop
   await P.page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect.poll(() => energyDays(P.page, 4), { timeout: 30_000 }).toBe(true);
   expect(await storedPhotos(P.page)).toEqual([]);
-  await P.page.getByRole('button', { name: 'Body', exact: true }).first().click();
+  await openTab(P.page, 'Body');
   await expect(P.page.locator('section[aria-labelledby="photos-title"]').getByText('No photos yet')).toBeVisible();
-  await P.page.getByRole('button', { name: 'Today', exact: true }).first().click();
-  await L.page.getByRole('button', { name: 'Today', exact: true }).first().click();
+  await openTab(P.page, 'Today');
+  await openTab(L.page, 'Today');
 });
 
 test('a device can stay unlocked; one that did not opt in asks again', async () => {

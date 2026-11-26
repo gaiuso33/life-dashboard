@@ -3,7 +3,7 @@
 // so a failure reports all the checks that broke, not just the first.
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
-import { APP, newContext } from './helpers';
+import { APP, newContext, openTab } from './helpers';
 
 test('advisor', async ({ browser: b }, testInfo) => {
   test.setTimeout(150_000);
@@ -17,7 +17,7 @@ await page.route('https://api.anthropic.com/**',async r=>{const req=r.request();
  if(mode==='401') return r.fulfill({status:401,contentType:'application/json',body:'{"error":{"message":"bad"}}'});
  r.fulfill({status:200,contentType:'application/json',headers:{'access-control-allow-origin':'*'},body:JSON.stringify({content:[{type:'text',text:'Mock advice: train Friday.'}],stop_reason:'end_turn'})});});
 await page.goto(APP); await page.getByRole('button',{name:'Look around with sample data first'}).click();
-await page.getByRole('button',{name:'Advisor'}).first().click();
+await openTab(page, 'Advisor');
 await page.waitForSelector('text=AI setup and privacy');
 ok(await page.locator('text=Today').first().isVisible(),'screen renders');
 ok(await page.getByRole('button',{name:'Write my review'}).isDisabled(),'review disabled without key');
@@ -48,14 +48,14 @@ await page.waitForTimeout(500);
 const st=await page.evaluate(()=>({app:localStorage.getItem('life-dashboard:v1'),key:localStorage.getItem('life-dashboard:ai-key')}));
 ok(!st.app.includes('sk-ant')&&!!st.key,'key stored separately, not in app data');
 ok(JSON.parse(st.app).advisor.reviews.length===1&&JSON.parse(st.app).advisor.settings.share.money===false,'review + settings persisted');
-await page.reload(); await page.getByRole('button',{name:'Advisor'}).first().click();
+await page.reload(); await openTab(page, 'Advisor');
 ok(await page.locator('text=Mock advice').isVisible()&&await page.locator('text=Connected').isVisible(),'persists after reload');
 await page.screenshot({path:S+'adv-laptop.png',fullPage:true});
-await page.getByRole('button',{name:'Today'}).first().click();
+await openTab(page, 'Today');
 ok(await page.locator('h2',{hasText:'Coach'}).count()>=0,'today ok');
 await page.screenshot({path:S+'today-coach.png'});
 const ph=await newContext(b,{viewport:{width:390,height:844}}); const p2=await ph.newPage(); p2.on('pageerror',e=>errs.push(e.message));
-await p2.goto(APP); await p2.getByRole('button',{name:'Look around with sample data first'}).click(); await p2.getByRole('button',{name:'Advisor'}).first().click();
+await p2.goto(APP); await p2.getByRole('button',{name:'Look around with sample data first'}).click(); await openTab(p2, 'Advisor');
 await p2.waitForSelector('text=AI setup and privacy');
 ok(await p2.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'no horizontal scroll on phone');
 await p2.screenshot({path:S+'adv-phone.png',fullPage:true});

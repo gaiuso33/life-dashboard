@@ -3,7 +3,7 @@
 // so a failure reports all the checks that broke, not just the first.
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
-import { APP, newContext } from './helpers';
+import { APP, newContext, openTab } from './helpers';
 
 test('first-run setup', async ({ browser: b }, testInfo) => {
   test.setTimeout(150_000);
@@ -45,7 +45,7 @@ ok(d.money.dailyEstimate===5000&&d.money.survivalOpening===50000&&d.money.savePc
 ok(d.career.goalCount===4&&d.career.deadline==='2027-06-01'&&d.career.githubUser==='octocat','career');
 ok(d.rewards.items.length===0,'empty reward menu');
 ok(!!d.stamps?.program&&!!d.stamps?.savePct,'settings stamped');
-await p.getByRole('button',{name:'Month'}).first().click();
+await openTab(p, 'Month');
 ok(await p.locator('.cal-d[aria-label^="Tuesday"] .sess',{hasText:'Push'}).count()>0,'calendar follows chosen days');
 await p.reload(); ok(await p.locator('text=Today’s plates').isVisible(),'no wizard after reload');
 // import path

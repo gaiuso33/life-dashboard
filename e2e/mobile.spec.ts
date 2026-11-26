@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { APP, newContext, setUpEmptyDashboard, TABS } from './helpers';
+import { APP, newContext, openTab, setUpEmptyDashboard, TABS } from './helpers';
 
 // Phone-sized checks with touch: the smallest common phone, a typical one, and a phone on its side. This is an emulation in Chromium,
 // so it catches layout and tap problems but cannot stand in for a real phone's keyboard, file picker or install prompt.
@@ -46,7 +46,7 @@ for (const size of SIZES) {
 
     const wide = size.width >= 900;
     for (const t of TABS) {
-      await page.getByRole('button', { name: t, exact: true }).first().tap();
+      await openTab(page, t, 'tap');
       await settle(page);
       expect(await overflow(page), `${t}: sideways scroll by ${JSON.stringify(await pokingOut(page))}`).toBeLessThanOrEqual(0);
       expect(await zoomers(page), `${t}: small text boxes`).toEqual([]);
@@ -91,7 +91,7 @@ test('320x568 small phone: nothing is pushed off screen when text renders wider'
   await setUpEmptyDashboard(page);
   await page.addStyleTag({ content: '* { letter-spacing: 0.06em !important; }' });
   for (const t of [...TABS, 'Settings']) {
-    await page.getByRole('button', { name: t, exact: true }).first().tap();
+    await openTab(page, t, 'tap');
     await settle(page);
     expect(await overflow(page), `${t}: sideways scroll with wider text`).toBeLessThanOrEqual(0);
     expect(await offscreen(page, '.nav-btn'), `${t}: bottom bar buttons cut off with wider text`).toEqual([]);

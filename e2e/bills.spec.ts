@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { DESKTOP, PHONE, expectNoA11yViolations, newDevice, setUpEmptyDashboard, stored } from './helpers';
+import { DESKTOP, PHONE, expectNoA11yViolations, newDevice, setUpEmptyDashboard, stored, openTab } from './helpers';
 
 // Ticking a bill or an income item on the Month calendar records it in Money. The tests run on the fixed clock, Friday 9 Oct 2026.
 
@@ -16,7 +16,7 @@ const panel = (p: Page) => p.locator('.plan-confirm');
 
 async function openMonth(page: Page) {
   await setUpEmptyDashboard(page);
-  await page.getByRole('button', { name: 'Month', exact: true }).first().click();
+  await openTab(page, 'Month');
   await page.getByRole('heading', { name: 'Add to this day' }).waitFor();
 }
 async function addItem(page: Page, kind: 'Bill' | 'Income' | 'Task', title: string, amount = '', monthly = false) {
@@ -52,7 +52,7 @@ test.describe('bills and income on the Month calendar', () => {
     expect(t[0].id).toMatch(/^plan:/);
 
     // It shows up in Money like any other entry, and the month's "bills still due" no longer counts it.
-    await page.getByRole('button', { name: 'Money', exact: true }).first().click();
+    await openTab(page, 'Money');
     await expect(page.getByText('Rent', { exact: true }).first()).toBeVisible();
     expect(errors).toEqual([]);
     await ctx.close();

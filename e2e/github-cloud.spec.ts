@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { CLOUD_APP, DESKTOP, MOCK, expectNoA11yViolations, newContext, setUpEmptyDashboard } from './helpers';
+import { CLOUD_APP, DESKTOP, MOCK, expectNoA11yViolations, newContext, setUpEmptyDashboard, openTab } from './helpers';
 
 // The GitHub token travelling in the encrypted cloud copy, between two devices, against the local mock of Supabase. GitHub is played
 // by the test. The two devices run in order.
@@ -42,7 +42,7 @@ const device = async (browser: Browser): Promise<Dev> => {
   return { ctx, page, errors };
 };
 const goToCareer = async (p: Page) => {
-  await p.getByRole('button', { name: 'Career' }).last().click();
+  await openTab(p, 'Career');
   await p.getByRole('heading', { name: 'GitHub activity' }).waitFor();
   const d = p.locator('.private-gh');
   if (!(await d.getByText('What it can see.').isVisible())) await d.locator('summary').click();

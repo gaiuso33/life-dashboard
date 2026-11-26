@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { APP, newDevice, setUpEmptyDashboard, stored, newContext } from './helpers';
+import { APP, newDevice, setUpEmptyDashboard, stored, newContext, openTab } from './helpers';
 
 const DAMAGED = '{"days": {broken';
 
@@ -70,7 +70,7 @@ test('a full or blocked disk shows a warning and clears once saving works again'
 test('a crash inside one screen leaves the rest of the app usable', async ({ browser }) => {
   const { page } = await newDevice(browser);
   await page.getByRole('button', { name: /sample data/i }).click();
-  await page.getByRole('button', { name: 'Today' }).first().click();
+  await openTab(page, 'Today');
   await page.evaluate(() => {
     const original = Date.prototype.toLocaleDateString;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,11 +82,11 @@ test('a crash inside one screen leaves the rest of the app usable', async ({ bro
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__boom = true;
   });
-  await page.getByRole('button', { name: 'Month' }).first().click();
+  await openTab(page, 'Month');
   await expect(page.locator('.crash')).toHaveCount(1);
   await expect(page.locator('.nav-btn').first()).toBeVisible();
   await page.evaluate(() => ((window as unknown as { __boom: boolean }).__boom = false));
-  await page.getByRole('button', { name: 'Train' }).first().click();
+  await openTab(page, 'Train');
   await expect(page.locator('.crash')).toHaveCount(0);
 });
 

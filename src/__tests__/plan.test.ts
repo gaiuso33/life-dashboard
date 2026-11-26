@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dailyNudges } from '../coach';
 import { dueSoon, monthCells, occursOn, plansBetween, shiftMonth } from '../plan';
 import { buildSampleData } from '../sample';
 import type { PlanItem } from '../types';
 
 const item = (date: string, repeat: 'none' | 'monthly'): PlanItem => ({ id: 'x', date, title: 't', kind: 'bill', amount: 100, repeat, doneOn: [] });
+
+// The sample data is built around today's date, so the clock is fixed to keep these checks the same on every day they run.
+beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-09T10:00:00+01:00') }));
+afterEach(() => vi.useRealTimers());
 
 describe('plans', () => {
   it('one-off items happen once', () => {

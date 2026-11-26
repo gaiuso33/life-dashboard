@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { APP, DESKTOP, expectNoA11yViolations, newDevice, PHONE, setUpEmptyDashboard, stored } from './helpers';
+import { APP, DESKTOP, expectNoA11yViolations, newDevice, PHONE, setUpEmptyDashboard, stored, openTab } from './helpers';
 
 const DEMO = APP + '?demo';
 const NAV_TABS = ['Today', 'Month', 'Train', 'Money', 'Career', 'Rewards', 'Advisor', 'Today'];
@@ -26,7 +26,7 @@ test.describe('demo mode', () => {
 
     // no sync, no account, no AI key field, nothing leaves the page
     await expect(page.getByRole('button', { name: 'Sync and backup' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Advisor' }).first().click();
+    await openTab(page, 'Advisor');
     await expect(page.getByLabel('Anthropic API key')).toHaveCount(0);
     await expect(page.getByText('switched off in the demo')).toBeVisible();
     // Nothing but the page itself: no fonts, sync, API or analytics requests.
@@ -34,7 +34,7 @@ test.describe('demo mode', () => {
 
     // reload resets it
     await page.reload();
-    await page.getByRole('button', { name: 'Today' }).first().click();
+    await openTab(page, 'Today');
     expect(await page.evaluate(() => localStorage.getItem('life-dashboard:v1'))).toBe(real);
     expect(errors).toEqual([]);
   });
@@ -73,14 +73,17 @@ test.describe('demo mode', () => {
   test('every tab is accessible and fits a phone, with the tour clear of the navigation', async ({ browser }) => {
     const { page, errors } = await newDevice(browser, PHONE, DEMO);
     const tour = page.getByRole('region', { name: 'Demo tour' });
-    const nav = page.locator('.rail nav');
+    const nav = page.locator('.dock');
     const tb = (await tour.boundingBox())!;
     const nb = (await nav.boundingBox())!;
     expect(tb.y + tb.height, 'tour sits above the bottom navigation').toBeLessThanOrEqual(nb.y + 1);
     await page.getByRole('button', { name: 'Skip tour' }).click();
     for (const t of ['Today', 'Month', 'Train', 'Money', 'Career', 'Rewards', 'Advisor', 'Body']) {
-      await page.getByRole('button', { name: t, exact: true }).first().click();
-      await expect(page.locator('.rail .nav-btn[aria-current="page"]')).toContainText(t);
+      await openTab(page, t);
+      // On a phone the bottom bar has four areas; Advisor is reached from the coach bar and belongs to none of them.
+      const area = ({ Today: 'Today', Month: 'Health', Train: 'Health', Body: 'Health', Money: 'Money', Career: 'Grow', Rewards: 'Grow' } as Record<string, string>)[t];
+      if (area) await expect(page.locator('.dock .nav-btn[aria-current="page"]')).toContainText(area);
+      else await expect(page.locator('.dock .nav-btn[aria-current="page"]')).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${t}: no horizontal scroll`).toBe(true);
       await expectNoA11yViolations(page, `demo ${t} (phone)`);
     }

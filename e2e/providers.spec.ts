@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { APP, expectNoA11yViolations, newDevice, stored } from './helpers';
+import { APP, expectNoA11yViolations, newDevice, stored, openTab } from './helpers';
 
 // Requests are answered by the test, but the browser still applies the page's security policy first,
 // so these also prove the policy lets each provider through.
@@ -44,7 +44,7 @@ test('every provider can be connected and asked, each with its own key and model
   const { page, errors } = await newDevice(browser);
   const seen = await mockProviders(page);
   await page.getByRole('button', { name: /sample data/i }).click();
-  await page.getByRole('button', { name: 'Advisor', exact: true }).first().click();
+  await openTab(page, 'Advisor');
   await expectNoA11yViolations(page, 'advisor with provider selector');
 
   // wrong-looking key for the chosen provider is caught before anything is sent
@@ -122,7 +122,7 @@ test('a provider error is explained in that provider’s terms', async ({ browse
   const { page } = await newDevice(browser);
   await page.route('https://api.openai.com/**', (route) => (route.request().method() === 'OPTIONS' ? route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' } }) : route.fulfill({ status: 401, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"error":{"message":"bad"}}' })));
   await page.getByRole('button', { name: /sample data/i }).click();
-  await page.getByRole('button', { name: 'Advisor', exact: true }).first().click();
+  await openTab(page, 'Advisor');
   await connect(page, 'OpenAI', 'sk-proj-abcdefghijklmnopqrstuvwxyz5678');
   await ask(page, 'hello');
   await expect(page.getByRole('alert').filter({ hasText: 'OpenAI rejected this API key' })).toBeVisible();
@@ -130,7 +130,7 @@ test('a provider error is explained in that provider’s terms', async ({ browse
 
 test('the demo offers no way to enter a key for any provider', async ({ browser }) => {
   const { page } = await newDevice(browser, undefined, APP + '?demo&tour=0');
-  await page.getByRole('button', { name: 'Advisor', exact: true }).first().click();
+  await openTab(page, 'Advisor');
   for (const p of ['OpenAI', 'Google Gemini', 'OpenRouter (many models)']) {
     await page.getByLabel('Provider').selectOption({ label: p });
     await expect(page.getByLabel(/API key$/)).toHaveCount(0);
