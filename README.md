@@ -415,3 +415,5 @@ Career -> GitHub activity -> **Private repositories and other branches (optional
 - **Laptop:** the side bar still lists every screen.
 - Mockups for the whole redesign, including the planned program picker and coach-built plans, are on the design canvas made for this release. Next stages: Today screen, Health and Money, Grow and Settings, then programs and the coach plan builder.
 - **Today (stage 2):** the barbell picture is replaced by four plate segments in the header band, the streaks sit in a compact strip under it, and Today's plates are cards with the first plate still to load marked "Next up".
+- **Health and Money (stage 3):** the Money header shows the survival fund as a progress bar (the explanatory sentence only appears until there is enough history for a target), selected category chips use the accent colour, and the Train, Body and Month subtitles are one short sentence.
+
