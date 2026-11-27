@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { READY_PROGRAMS, matchProgram } from '../programs';
 import { lastSession, plannedFor, readyForMoreLoad, sessionProgress } from '../derive';
 import type { TrainView } from '../nav';
 import { MOBILITY, WEEKDAY_SHORT, dayDef, getProgram } from '../program';
@@ -9,15 +10,29 @@ import { MAX_LOAD_KG, loadStep, loadText, nextLoadKg, parseLoad, toDisplay, weig
 import { fmtShort, todayKey, weekdayName } from '../utils';
 
 
-export function Train({ view, setView }: { view: TrainView; setView: (v: TrainView) => void }) {
+export function Train({ view, setView, openSettings }: { view: TrainView; setView: (v: TrainView) => void; openSettings?: () => void }) {
+  const { data } = useStore();
+  const [picking, setPicking] = useState(false);
   const today = todayKey();
   const planned = plannedFor(today);
+  if (view !== 'mobility' && !getProgram().some((d) => d.key === view)) view = getProgram()[0].key;
   return (
     <div className="page">
       <header className="page-head">
         <h1>Train</h1>
         <p className="sub">Log reps for each set. Weight is optional.</p>
       </header>
+
+      <div className="program-line">
+        <span>
+          Program: <b>{matchProgram(getProgram())?.name ?? 'My own program'}</b>
+          <small> · {getProgram().length} sessions a week</small>
+        </span>
+        <button className="btn" onClick={() => setPicking((v) => !v)} aria-expanded={picking}>
+          Change program
+        </button>
+      </div>
+      {picking && <ProgramPicker custom={data.program != null} onDone={() => { setPicking(false); setView(getProgram()[0].key); }} openSettings={openSettings} />}
 
       <div className="tabs" role="tablist" aria-label="Session">
         {getProgram().map((d) => (
@@ -228,6 +243,51 @@ function Mobility() {
           </li>
         ))}
       </ol>
+    </section>
+  );
+}
+
+function ProgramPicker({ onDone, openSettings, custom }: { onDone: () => void; openSettings?: () => void; custom: boolean }) {
+  const { dispatch } = useStore();
+  const active = matchProgram(getProgram());
+  return (
+    <section className="panel picker" aria-label="Choose a program">
+      <h2>Choose a program</h2>
+      <p className="note first">Pick a ready-made plan. Your logged sessions, reps and weights are kept; only what Train shows next changes.</p>
+      <ul className="program-list">
+        {READY_PROGRAMS.map((p) => (
+          <li key={p.id} className={active?.id === p.id ? 'is-current' : ''}>
+            <div>
+              <b>{p.name}</b>
+              <span className="tags">
+                {p.days.length} days a week · {p.level} · {p.equipment}
+              </span>
+              <p>{p.blurb}</p>
+              <small>{p.days.map((d) => `${d.title} ${WEEKDAY_SHORT[d.weekday]}`).join(' · ')}</small>
+            </div>
+            {active?.id === p.id ? (
+              <span className="current-tag">In use</span>
+            ) : (
+              <button
+                className="btn primary"
+                aria-label={`Use ${p.name}`}
+                onClick={() => {
+                  dispatch({ t: 'program-set', program: p.id === 'ppl' ? undefined : p.days });
+                  onDone();
+                }}
+              >
+                Use this program
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {openSettings && (
+        <p className="note">
+          {custom && !active ? 'You are using your own program. ' : ''}
+          Want to build your own? <button className="link-btn" onClick={openSettings}>Edit sessions in Settings</button>.
+        </p>
+      )}
     </section>
   );
 }

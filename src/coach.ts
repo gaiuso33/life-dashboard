@@ -3,7 +3,7 @@ import type { BadgeState } from './badges';
 import { dayStatus, finishedSessionOn, lastSession, plannedFor, readyForMoreLoad, sessionProgress, sessionRepTotal } from './derive';
 import {suggestedSave, survivalTarget} from './money';
 import type { Tab, TrainView } from './nav';
-import { dayDef } from './program';
+import { dayDef, getProgram, sessionsPerWeek } from './program';
 import { dueSoon } from './plan';
 import type { DayKey } from './program';
 import { TIER_LABEL, landmarksFor, periodsFor } from './rewards';
@@ -17,7 +17,7 @@ import { fmtMoney, fmtWeight, fmtWeightDelta } from './units';
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** Names of exercises whose last finished session hit the top of the rep range on every set. */
-export function readyExercises(data: AppData, before: string, days: DayKey[] = ['push', 'pull', 'legs']): string[] {
+export function readyExercises(data: AppData, before: string, days: DayKey[] = getProgram().map((d) => d.key)): string[] {
   const out: string[] = [];
   for (const day of days) {
     const last = lastSession(data, day, before);
@@ -228,14 +228,16 @@ export function weeklyReview(data: AppData, monday: string, today: string, state
     { label: 'Weight', value: weighIn ? fmtWeight(weighIn.weight) : 'No weigh-in', note: weightDelta == null ? undefined : `${fmtWeightDelta(weightDelta)} since the last one` },
   ];
 
+  const goal = sessionsPerWeek();
+  const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const wins: string[] = [];
   const open: string[] = [];
   const focus: string[] = [];
 
   // training
-  if (sessions >= 3) wins.push('All three sessions are done.');
-  else if (complete) open.push(`Only ${sessions} of 3 sessions got done.`);
-  else if (3 - sessions > 0) open.push(`${plural(3 - sessions, 'session')} still to do this week.`);
+  if (sessions >= goal) wins.push(goal === 1 ? 'The session is done.' : `All ${goal} sessions are done.`);
+  else if (complete) open.push(`Only ${sessions} of ${goal} sessions got done.`);
+  else if (goal - sessions > 0) open.push(`${plural(goal - sessions, 'session')} still to do this week.`);
   if (repsChange != null && repsChange >= 5 && sessions > 0) wins.push(`Total reps are up ${repsChange}% on the week before.`);
   if (repsChange != null && repsChange <= -15 && complete) open.push(`Total reps fell ${Math.abs(repsChange)}% on the week before, which usually just reflects missed sessions.`);
 
@@ -265,7 +267,7 @@ export function weeklyReview(data: AppData, monday: string, today: string, state
   if (earnedThisWeek.length > 0) wins.push(`New ${earnedThisWeek.length === 1 ? 'badge' : 'badges'}: ${earnedThisWeek.map((b) => b.name).join(', ')}.`);
 
   // focus, at most three, in order of what blocks the most
-  if (sessions < 3) focus.push(complete ? 'Protect all three sessions: block Monday, Wednesday and Friday in your calendar.' : 'Finish the remaining session(s) this week.');
+  if (sessions < goal) focus.push(complete ? `Protect all ${goal} sessions: block ${getProgram().map((d) => WEEKDAY_NAMES[d.weekday]).join(', ')} in your calendar.` : 'Finish the remaining session(s) this week.');
   if (saved === 0) focus.push(income > 0 ? `Move your split (${fmtMoney(suggestedSave(income, data.money.savePct))}) into savings as soon as money lands.` : 'Move even a small amount into savings early in the week so the reward stays in reach.');
   if (ready.length > 0) focus.push(`Add load next session on ${ready.slice(0, 3).join(', ').toLowerCase()}.`);
   if (complete && cs.days < 4) focus.push('Aim for commits on at least four days; one small commit is enough to count.');

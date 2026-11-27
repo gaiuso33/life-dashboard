@@ -1,4 +1,4 @@
-import { dayDef, dayForWeekday, getProgram } from './program';
+import { dayDef, dayForWeekday, getProgram, sessionsPerWeek } from './program';
 import type { DayKey, ExerciseDef } from './program';
 import type { AppData, BodyEntry, Session } from './types';
 import { addDays, dayNumber, mondayOf, weekday } from './utils';
@@ -12,12 +12,9 @@ export const ITEMS = [
 export type ItemKey = (typeof ITEMS)[number]['key'];
 export type DayStatus = Record<ItemKey, boolean>;
 
-const GYM_DAYS: DayKey[] = ['push', 'pull', 'legs'];
-
 export function finishedSessionOn(data: AppData, date: string): Session | undefined {
-  for (const d of GYM_DAYS) {
-    const s = data.sessions[`${date}|${d}`];
-    if (s?.finished) return s;
+  for (const s of Object.values(data.sessions)) {
+    if (s.date === date && s.finished) return s;
   }
   return undefined;
 }
@@ -52,13 +49,13 @@ export function sessionsInWeek(data: AppData, monday: string): number {
   return n;
 }
 
-/** Consecutive weeks with all 3 sessions done, counting the current week once it is complete. */
+/** Consecutive weeks with every session of the programme done, counting the current week once it is complete. */
 export function weekStreak(data: AppData, today: string): number {
   let monday = mondayOf(today);
   let n = 0;
-  if (sessionsInWeek(data, monday) >= 3) n++;
+  if (sessionsInWeek(data, monday) >= sessionsPerWeek()) n++;
   monday = addDays(monday, -7);
-  while (n < 200 && sessionsInWeek(data, monday) >= 3) {
+  while (n < 200 && sessionsInWeek(data, monday) >= sessionsPerWeek()) {
     n++;
     monday = addDays(monday, -7);
   }
@@ -100,7 +97,7 @@ export function nextSession(from: string): { date: string; day: DayKey } {
     const d = plannedFor(k);
     if (d) return { date: k, day: d };
   }
-  return { date: from, day: 'push' };
+  return { date: from, day: getProgram()[0].key };
 }
 
 export function sessionRepTotal(s: Session): number {

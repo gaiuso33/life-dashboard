@@ -19,7 +19,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isDate = (x: unknown): x is string => typeof x === 'string' && DATE.test(x);
 const strings = (x: unknown): string[] => arr(x).filter((v): v is string => typeof v === 'string');
 const oneOf = <T extends string>(x: unknown, list: readonly T[]): T | null => (list.includes(x as T) ? (x as T) : null);
-const DAYS: readonly DayKey[] = ['push', 'pull', 'legs'];
+const dayId = (x: unknown): DayKey | null => (typeof x === 'string' && /^[a-z0-9-]{1,24}$/.test(x) ? x : null);
 
 function keep<T>(list: unknown, fn: (r: Rec) => T | null): T[] {
   const out: T[] = [];
@@ -57,7 +57,7 @@ export function sanitize(input: AppData): AppData {
   const sessions: AppData['sessions'] = {};
   for (const [k, v] of Object.entries(obj(p.sessions))) {
     const s = obj(v);
-    const day = oneOf(s.day, DAYS);
+    const day = dayId(s.day);
     if (!isDate(s.date) || !day || k !== `${s.date}|${day}`) continue;
     const loads: Record<string, string> = {};
     for (const [ex, l] of Object.entries(obj(s.loads))) if (typeof l === 'string') loads[ex] = l;
