@@ -91,7 +91,7 @@ export function Career() {
       <header className="page-head">
         <h1>Career</h1>
         <p className="sub">
-          Goal: {c.goalCount} solid portfolio projects that put your course concepts to work, by {fmtLong(c.deadline)}, {c.deadline.slice(0, 4)}.
+          Goal: {c.goalCount} solid portfolio projects by {fmtLong(c.deadline)}, {c.deadline.slice(0, 4)}.
         </p>
       </header>
 
