@@ -1,4 +1,3 @@
-import { Barbell } from '../Barbell';
 import { GettingStarted } from './GettingStarted';
 import { ITEMS, dayScore, dayStatus, dayStreak, nextSession, plannedFor, sessionProgress, sessionsInWeek, weekStreak } from '../derive';
 import type { ItemKey } from '../derive';
@@ -17,11 +16,12 @@ import { fmtMoney } from '../units';
 
 const colorOf = (k: ItemKey) => ITEMS.find((i) => i.key === k)!.color;
 
-function Row({ k, title, detail, done, children }: { k: ItemKey; title: string; detail: string; done: boolean; children: React.ReactNode }) {
+function Row({ k, title, detail, done, next, children }: { k: ItemKey; title: string; detail: string; done: boolean; next?: boolean; children: React.ReactNode }) {
   return (
-    <li className={done ? 'row is-done' : 'row'}>
+    <li className={`row${done ? ' is-done' : ''}${next ? ' is-next' : ''}`}>
       <span className="chip" style={{ background: colorOf(k) }} aria-hidden="true" />
       <div className="row-text">
+        {next && <span className="next-label">Next up</span>}
         <b>{title}</b>
         <span>{detail}</span>
       </div>
@@ -53,19 +53,25 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
   const streak = dayStreak(data, today);
   const wStreak = weekStreak(data, today);
   const extras = dailyNudges(data, today).filter((n) => n.kind === 'extra').slice(0, 2);
+  // The first plate still to load is called out, so the screen answers "what now?" at a glance.
+  const nextKey = ITEMS.find((i) => !status[i.key])?.key;
 
   return (
     <div className="page">
       <header className="page-head">
         <h1>{fmtLong(today)}</h1>
+        <div className="plate-bar" role="img" aria-label={`${score} of 4 plates loaded`}>
+          {ITEMS.map((it) => (
+            <span key={it.key} className={status[it.key] ? 'on' : ''} style={{ ['--c' as string]: it.color }} />
+          ))}
+        </div>
         <p className="sub">{score === 4 ? 'All four plates are on the bar.' : `${score} of 4 plates loaded. Three or more counts as a strong day.`}</p>
       </header>
 
       <GettingStarted go={go} onSync={onSync} />
 
-      <section className="hero panel">
-        <Barbell status={status} />
-        <dl className="stats">
+      <section className="panel streaks">
+        <dl className="stats compact">
           <div>
             <dt>Strong-day streak</dt>
             <dd>
@@ -93,13 +99,14 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
       <div className="cols">
         <section className="panel">
           <h2>Today’s plates</h2>
-          <ul className="rows">
+          <ul className="rows today-rows">
             {planned ? (
               <Row
                 k="training"
                 title={`${dayDef(planned).title} session`}
                 detail={session?.finished ? 'Finished' : `${prog!.done} of ${prog!.total} sets logged`}
                 done={status.training}
+                next={nextKey === 'training'}
               >
                 <button className="btn" onClick={() => go('train', planned)}>
                   {session?.finished ? 'Review' : 'Open session'}
@@ -111,6 +118,7 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
                 title="Rest day mobility"
                 detail={`About 12 minutes. Next session: ${dayDef(upcoming.day).title} on ${weekdayName(upcoming.date)}.`}
                 done={!!log.mobility}
+                next={nextKey === 'training'}
               >
                 <button className="btn ghost" onClick={() => go('train', 'mobility')}>
                   See routine
@@ -125,6 +133,7 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
               title="Build a project"
               detail={commitsToday > 0 ? `${commitsToday} ${commitsToday === 1 ? 'commit' : 'commits'} from GitHub today.` : 'Commit, ship or study something for your portfolio.'}
               done={status.code}
+              next={nextKey === 'code'}
             >
               {commitsToday === 0 && (
                 <button className="btn" aria-pressed={!!log.code} onClick={() => patch({ code: !log.code })}>
@@ -140,6 +149,7 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
               title="Log today’s spending"
               detail={spentToday.length ? `${fmtMoney(spentTotal)} across ${spentToday.length} ${spentToday.length === 1 ? 'entry' : 'entries'}.` : log.money ? 'Marked as no spending today.' : 'Even a rough total counts.'}
               done={status.money}
+              next={nextKey === 'money'}
             >
               {!spentToday.length && (
                 <button className="btn ghost" aria-pressed={!!log.money} onClick={() => patch({ money: !log.money })}>
@@ -150,7 +160,7 @@ export function Today({ go, onSync }: { go: (t: Tab, v?: TrainView) => void; onS
                 {spentToday.length ? 'Add more' : 'Log spending'}
               </button>
             </Row>
-            <Row k="checkin" title="Energy check-in" detail={log.energy != null ? `You logged ${log.energy} of 5.` : 'How do you feel today? 1 is drained, 5 is great.'} done={log.energy != null}>
+            <Row k="checkin" title="Energy check-in" detail={log.energy != null ? `You logged ${log.energy} of 5.` : 'How do you feel today? 1 is drained, 5 is great.'} done={log.energy != null} next={nextKey === 'checkin'}>
               <div className="scale" role="group" aria-label="Energy, 1 to 5">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button key={n} aria-pressed={log.energy === n} onClick={() => patch({ energy: log.energy === n ? undefined : n })}>

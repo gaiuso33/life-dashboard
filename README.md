@@ -414,3 +414,4 @@ Career -> GitHub activity -> **Private repositories and other branches (optional
 - **Phone:** the bottom bar has four areas: Today, Health (Train, Body, Month), Money and Grow (Career, Rewards). Areas with more than one screen show pill tabs under the header band, and tapping an area returns to the screen last open in it. An "Ask your coach…" bar above the bottom bar opens the Advisor, which no longer has a tab. Settings stays at the top.
 - **Laptop:** the side bar still lists every screen.
 - Mockups for the whole redesign, including the planned program picker and coach-built plans, are on the design canvas made for this release. Next stages: Today screen, Health and Money, Grow and Settings, then programs and the coach plan builder.
+- **Today (stage 2):** the barbell picture is replaced by four plate segments in the header band, the streaks sit in a compact strip under it, and Today's plates are cards with the first plate still to load marked "Next up".
