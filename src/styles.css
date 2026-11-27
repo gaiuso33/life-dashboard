@@ -14,6 +14,7 @@
   --plate-yellow: #885600;
   --plate-green: #0b7a7c;
   --accent: #0b7a7c;
+  --on-accent: #ffffff;
   --band: #14213d;
   --on-band: #f5f7fb;
   --on-band-muted: #b8c2d9;
@@ -41,6 +42,7 @@
     --plate-yellow: #d9a21b;
     --plate-green: #26b583;
     --accent: #2fd0c8;
+    --on-accent: #0a0d13;
     --band: #121722;
     --on-band: #eef1f6;
     --on-band-muted: #9aa5b9;
@@ -309,7 +311,7 @@ input:focus-visible { outline-offset: 0; border-color: var(--chalk); }
 .amount-box input:focus-visible { outline: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips button { background: var(--steel-2); border: 1px solid var(--steel-3); border-radius: 999px; padding: 8px 14px; min-height: 40px; }
-.chips button[aria-checked='true'] { background: var(--plate-yellow); border-color: var(--plate-yellow); color: var(--ink); font-weight: 600; }
+.chips button[aria-checked='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .two { display: grid; gap: 12px; }
 .three { display: grid; gap: 12px; }
 @media (min-width: 560px) { .two { grid-template-columns: 2fr 1fr; } .three { grid-template-columns: repeat(3, 1fr); } }
