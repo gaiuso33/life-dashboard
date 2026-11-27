@@ -413,7 +413,8 @@ Career -> GitHub activity -> **Private repositories and other branches (optional
 - **DM Sans** replaces Barlow, bundled with the app like before.
 - **Phone:** the bottom bar has four areas: Today, Health (Train, Body, Month), Money and Grow (Career, Rewards). Areas with more than one screen show pill tabs under the header band, and tapping an area returns to the screen last open in it. An "Ask your coach…" bar above the bottom bar opens the Advisor, which no longer has a tab. Settings stays at the top.
 - **Laptop:** the side bar still lists every screen.
-- Mockups for the whole redesign, including the planned program picker and coach-built plans, are on the design canvas made for this release. Next stages: Today screen, Health and Money, Grow and Settings, then programs and the coach plan builder.
+- Mockups for the whole redesign, including the planned program picker and coach-built plans, are on the design canvas made for this release. Next stages: programs and the coach plan builder.
 - **Today (stage 2):** the barbell picture is replaced by four plate segments in the header band, the streaks sit in a compact strip under it, and Today's plates are cards with the first plate still to load marked "Next up".
 - **Health and Money (stage 3):** the Money header shows the survival fund as a progress bar (the explanatory sentence only appears until there is enough history for a target), selected category chips use the accent colour, and the Train, Body and Month subtitles are one short sentence.
+- **Grow and Settings (stage 4):** the Career and Rewards subtitles are one short sentence, and Settings opens with a row of jump links (Reminders, Region and so on) so the long list is no longer a scroll; choosing one moves focus to that section.
 

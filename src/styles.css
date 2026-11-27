@@ -765,3 +765,8 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 4px; }
 
 .private-gh .keep-cloud { margin-top: 12px; }
 .private-gh .keep-cloud .check { align-items: flex-start; }
+
+/* Settings: a row of jump links above the long list of sections. */
+.settings-index { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; }
+.settings-index button { flex: none; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--steel-3); background: var(--steel-1); color: var(--chalk); font-weight: 500; font-size: 15px; }
+.settings-index button:hover { background: var(--steel-2); }

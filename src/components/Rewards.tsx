@@ -97,7 +97,7 @@ export function Rewards() {
     <div className="page">
       <header className="page-head">
         <h1>Rewards</h1>
-        <p className="sub">Earn treats by showing up. Every reward needs a savings transfer in its period, even a small one, so the treats never come at the cost of your safety net.</p>
+        <p className="sub">Earn treats by showing up. Each one needs a savings transfer in its period, even a small one.</p>
       </header>
 
       <section className="panel">

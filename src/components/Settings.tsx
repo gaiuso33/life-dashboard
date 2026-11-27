@@ -435,6 +435,31 @@ function Install() {
   );
 }
 
+/** Jump links to each settings section, built from the section headings so they can never fall out of step with the page. */
+function SettingsIndex() {
+  const [items, setItems] = useState<string[]>([]);
+  useEffect(() => {
+    setItems([...document.querySelectorAll('.settings > .panel > h2')].map((h) => h.textContent ?? '').filter(Boolean));
+  }, []);
+  const jump = (title: string) => {
+    const h = [...document.querySelectorAll<HTMLElement>('.settings > .panel > h2')].find((x) => x.textContent === title);
+    if (!h) return;
+    h.setAttribute('tabindex', '-1');
+    h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    h.focus({ preventScroll: true });
+  };
+  if (items.length < 2) return null;
+  return (
+    <nav className="settings-index" aria-label="Jump to a settings section">
+      {items.map((t) => (
+        <button key={t} type="button" aria-label={`Jump to ${t}`} onClick={() => jump(t)}>
+          {t}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => void }) {
   return (
     <div className="page">
@@ -442,6 +467,7 @@ export function Settings({ go, onSync }: { go: (t: Tab) => void; onSync: () => v
         <h1>Settings</h1>
         <p className="sub">Make the dashboard fit you. Changes apply straight away, and your logged history is never rewritten.</p>
       </header>
+      <SettingsIndex />
       <div className="settings">
         <Install />
         <Region />
