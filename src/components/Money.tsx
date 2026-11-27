@@ -111,7 +111,22 @@ export function Money() {
     <div className="page">
       <header className="page-head">
         <h1>Money</h1>
-        <p className="sub">Log each spend in a few taps. Your survival fund target is six months of what you actually spend, so every entry makes it more accurate.</p>
+        {survival.target != null ? (
+          <div className="fund-band">
+            <div className="fund-line">
+              <span>Survival fund</span>
+              <b>
+                {fmtMoney(survivalNow)} of {fmtMoney(survival.target)}
+              </b>
+            </div>
+            <div className="meter-bar" role="progressbar" aria-label="Survival fund" aria-valuenow={Math.min(survivalNow, survival.target)} aria-valuemin={0} aria-valuemax={survival.target}>
+              <i style={{ width: `${Math.max(0, Math.min(100, (survivalNow / survival.target) * 100))}%` }} />
+            </div>
+            <p className="sub">Six months of what you actually spend, so every entry makes it more accurate.</p>
+          </div>
+        ) : (
+          <p className="sub">Log each spend in a few taps. Your survival fund target is six months of what you actually spend, so every entry makes it more accurate.</p>
+        )}
       </header>
 
       <div className="cols">

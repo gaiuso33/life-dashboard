@@ -215,6 +215,11 @@ ul, ol { list-style: none; }
 .meter { margin-top: 10px; }
 .meter-top { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
 .meter-top b { color: var(--chalk); font-weight: 600; }
+.fund-band { margin-top: 8px; display: grid; gap: 6px; }
+.fund-line { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 15px; color: var(--on-band-muted); }
+.fund-line b { color: var(--on-band); font-weight: 600; }
+.page-head .meter-bar { background: rgba(184, 194, 217, .35); }
+.page-head .meter-bar i { background: #2fd0c8; }
 .meter-bar { height: 8px; border-radius: 4px; background: var(--steel-3); overflow: hidden; }
 .meter-bar i { display: block; height: 100%; background: var(--plate-green); border-radius: 4px; transition: width 300ms ease-out; }
 

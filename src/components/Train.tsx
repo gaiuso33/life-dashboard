@@ -16,7 +16,7 @@ export function Train({ view, setView }: { view: TrainView; setView: (v: TrainVi
     <div className="page">
       <header className="page-head">
         <h1>Train</h1>
-        <p className="sub">Log reps for each set. Adding the weight is optional: the app shows it in your unit and uses it for your training volume. Hit the top of the range on every set and it tells you to add weight.</p>
+        <p className="sub">Log reps for each set. Weight is optional.</p>
       </header>
 
       <div className="tabs" role="tablist" aria-label="Session">
