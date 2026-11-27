@@ -64,7 +64,7 @@ export function Body() {
     <div className="page">
       <header className="page-head">
         <h1>Body</h1>
-        <p className="sub">Weigh in once a week, at the same time of day. Measurements are optional but make the trend easier to trust.</p>
+        <p className="sub">Weigh in once a week, at the same time of day. Measurements are optional.</p>
       </header>
 
       <div className="cols">

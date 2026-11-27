@@ -83,7 +83,7 @@ export function Month() {
     <div className="page">
       <header className="page-head">
         <h1>{monthTitle(ym)}</h1>
-        <p className="sub">Your month at a glance: training days, what you did, and bills, money due in and tasks you plan ahead.</p>
+        <p className="sub">Your month at a glance: training, bills, income and tasks.</p>
       </header>
 
       <div className="month-nav">
