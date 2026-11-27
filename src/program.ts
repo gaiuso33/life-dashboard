@@ -1,4 +1,5 @@
-export type DayKey = 'push' | 'pull' | 'legs';
+/** A session's id. The built-in programme uses push, pull and legs; other programmes use their own ids. */
+export type DayKey = string;
 
 export interface ExerciseDef {
   id: string;
@@ -89,17 +90,20 @@ export const getProgram = (): DayDef[] => active;
 export const setActiveProgram = (p?: DayDef[]) => {
   active = p && programError(p) == null ? p : DEFAULT_PROGRAM;
 };
-export const dayDef = (k: DayKey): DayDef => active.find((d) => d.key === k)!;
+/** Sessions a week the active programme asks for. */
+export const sessionsPerWeek = (): number => active.length;
+/** Looks a session up by id. Falls back to the default programme so old history still shows its name. */
+export const dayDef = (k: DayKey): DayDef => active.find((d) => d.key === k) ?? DEFAULT_PROGRAM.find((d) => d.key === k) ?? active[0];
 export const dayForWeekday = (wd: number): DayKey | null => active.find((d) => d.weekday === wd)?.key ?? null;
 export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** Returns a plain-words problem with a programme, or null when it is usable. */
 export function programError(p: DayDef[]): string | null {
-  const keys: DayKey[] = ['push', 'pull', 'legs'];
-  if (!Array.isArray(p) || p.length !== 3 || !keys.every((k) => p.some((d) => d.key === k))) return 'The programme needs a push, a pull and a legs day.';
+  if (!Array.isArray(p) || p.length < 1 || p.length > 6) return 'A programme needs from 1 to 6 sessions a week.';
+  if (p.some((d) => typeof d.key !== 'string' || !d.key.trim()) || new Set(p.map((d) => d.key)).size !== p.length) return 'Every session needs its own id.';
   const days = p.map((d) => d.weekday);
   if (days.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) return 'Pick a weekday for every session.';
-  if (new Set(days).size !== 3) return 'Two sessions are on the same weekday. Give each its own day.';
+  if (new Set(days).size !== p.length) return 'Two sessions are on the same weekday. Give each its own day.';
   for (const d of p) {
     if (!d.title.trim()) return 'Every session needs a name.';
     if (d.exercises.length === 0) return `${d.title} has no exercises. Add at least one.`;

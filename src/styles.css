@@ -770,3 +770,15 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .settings-index { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; }
 .settings-index button { flex: none; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--steel-3); background: var(--steel-1); color: var(--chalk); font-weight: 500; font-size: 15px; }
 .settings-index button:hover { background: var(--steel-2); }
+
+/* Program line and picker on the Train screen */
+.program-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.program-line small { color: var(--muted); }
+.program-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; }
+.program-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--steel-2); }
+.program-list li.is-current { border-color: var(--accent); }
+.program-list .tags { display: block; color: var(--muted); font-size: 0.85rem; margin: 2px 0 4px; }
+.program-list p { margin: 0 0 4px; }
+.program-list small { color: var(--muted); }
+.current-tag { font-weight: 700; white-space: nowrap; }
+@media (max-width: 520px) { .program-list li { flex-direction: column; align-items: stretch; } }

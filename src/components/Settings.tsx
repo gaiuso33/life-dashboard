@@ -610,7 +610,7 @@ function Programme() {
           Reset to the original
         </button>
       </div>
-      <p className="note">Reps you already logged stay put. Renaming an exercise keeps its history; removing one hides it. The weekday {WEEKDAY_SHORT[saved[0].weekday]}, {WEEKDAY_SHORT[saved[1].weekday]} and {WEEKDAY_SHORT[saved[2].weekday]} pattern is what Today and the calendar follow.</p>
+      <p className="note">Reps you already logged stay put. Renaming an exercise keeps its history; removing one hides it. The weekdays ({saved.map((d) => WEEKDAY_SHORT[d.weekday]).join(', ')}) are what Today and the calendar follow. To start from a ready-made program, use Change program on the Train screen.</p>
     </section>
   );
 }

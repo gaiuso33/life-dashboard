@@ -202,7 +202,7 @@ export function App() {
           <ErrorBoundary inline key={tab}>
             {tab === 'today' && <Today go={go} onSync={() => setSyncOpen(true)} />}
             {tab === 'month' && <Month />}
-            {tab === 'train' && <Train view={view} setView={setView} />}
+            {tab === 'train' && <Train view={view} setView={setView} openSettings={() => go('settings')} />}
             {tab === 'money' && <Money />}
             {tab === 'career' && <Career />}
             {tab === 'rewards' && <Rewards />}
