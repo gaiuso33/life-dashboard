@@ -782,3 +782,6 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .program-list small { color: var(--muted); }
 .current-tag { font-weight: 700; white-space: nowrap; }
 @media (max-width: 520px) { .program-list li { flex-direction: column; align-items: stretch; } }
+.coach-offer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: var(--radius); margin: 12px 0; }
+.coach-offer p { margin: 2px 0 0; color: var(--muted); }
+@media (max-width: 520px) { .coach-offer { flex-direction: column; align-items: stretch; } }

@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
+import { AiError, askAi, loadKey, providerOf } from '../ai';
+import { isDemo } from '../demo';
+import { EQUIPMENT, EXPERIENCE, GOALS, PLAN_SYSTEM, PlanError, buildPlanOffline, parseAiPlan, planPrompt } from '../planBuilder';
+import type { Equipment, Experience, Goal, PlanRequest } from '../planBuilder';
 import { READY_PROGRAMS, matchProgram } from '../programs';
 import { lastSession, plannedFor, readyForMoreLoad, sessionProgress } from '../derive';
 import type { TrainView } from '../nav';
 import { MOBILITY, WEEKDAY_SHORT, dayDef, getProgram } from '../program';
-import type { DayKey, ExerciseDef } from '../program';
+import type { DayDef, DayKey, ExerciseDef } from '../program';
 import { useStore } from '../store';
 import type { Session } from '../types';
-import { MAX_LOAD_KG, loadStep, loadText, nextLoadKg, parseLoad, toDisplay, weightUnit } from '../units';
+import { MAX_LOAD_KG, fmtWeight, loadStep, loadText, nextLoadKg, parseLoad, toDisplay, weightUnit } from '../units';
 import { fmtShort, todayKey, weekdayName } from '../utils';
 
 
@@ -250,10 +254,21 @@ function Mobility() {
 function ProgramPicker({ onDone, openSettings, custom }: { onDone: () => void; openSettings?: () => void; custom: boolean }) {
   const { dispatch } = useStore();
   const active = matchProgram(getProgram());
+  const [building, setBuilding] = useState(false);
+  if (building) return <PlanBuilder onDone={onDone} onBack={() => setBuilding(false)} openSettings={openSettings} />;
   return (
     <section className="panel picker" aria-label="Choose a program">
       <h2>Choose a program</h2>
-      <p className="note first">Pick a ready-made plan. Your logged sessions, reps and weights are kept; only what Train shows next changes.</p>
+      <div className="coach-offer">
+        <div>
+          <b>Have the coach build one for you</b>
+          <p>Tell it your goal, days a week and equipment, and it makes a plan to fit.</p>
+        </div>
+        <button className="btn primary" onClick={() => setBuilding(true)}>
+          Build my plan
+        </button>
+      </div>
+      <p className="note first">Or pick a ready-made plan. Your logged sessions, reps and weights are kept; only what Train shows next changes.</p>
       <ul className="program-list">
         {READY_PROGRAMS.map((p) => (
           <li key={p.id} className={active?.id === p.id ? 'is-current' : ''}>
@@ -288,6 +303,156 @@ function ProgramPicker({ onDone, openSettings, custom }: { onDone: () => void; o
           Want to build your own? <button className="link-btn" onClick={openSettings}>Edit sessions in Settings</button>.
         </p>
       )}
+    </section>
+  );
+}
+
+function PlanBuilder({ onDone, onBack, openSettings }: { onDone: () => void; onBack: () => void; openSettings?: () => void }) {
+  const { data, dispatch } = useStore();
+  const latest = data.body[data.body.length - 1];
+  const [goal, setGoal] = useState<Goal>('muscle');
+  const [days, setDays] = useState(3);
+  const [equipment, setEquipment] = useState<Equipment>('full');
+  const [experience, setExperience] = useState<Experience>('beginner');
+  const [avoid, setAvoid] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [plan, setPlan] = useState<{ days: DayDef[]; by: 'ai' | 'rules'; req: PlanRequest } | null>(null);
+
+  const { settings } = data.advisor;
+  const provider = providerOf(settings.provider);
+  const key = isDemo ? '' : loadKey(provider.id);
+
+  const make = async (useAi: boolean) => {
+    const req: PlanRequest = { goal, days, equipment, experience, avoid, ...(latest && { bodyKg: latest.weight }) };
+    setNote(null);
+    if (useAi && key) {
+      setBusy(true);
+      try {
+        const text = await askAi({ provider: provider.id, apiKey: key, model: settings.model, system: PLAN_SYSTEM, messages: [{ role: 'user', content: planPrompt(req, weightUnit(), toDisplay) }], maxTokens: 1500 });
+        setPlan({ days: parseAiPlan(text, req), by: 'ai', req });
+      } catch (e) {
+        setNote(`${e instanceof AiError || e instanceof PlanError ? e.message : 'Something went wrong.'} You can try again, or use the built-in rules.`);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setPlan({ days: buildPlanOffline(req), by: 'rules', req });
+  };
+
+  if (plan) {
+    return (
+      <section className="panel picker" aria-label="Review the plan">
+        <h2>Review the plan</h2>
+        <p className="note first">{plan.by === 'ai' ? `Made by the coach with your ${provider.name} key.` : 'Made by the built-in rules, so it works without internet or an AI key.'} Nothing changes until you use it.</p>
+        <ul className="program-list">
+          {plan.days.map((d) => (
+            <li key={d.key}>
+              <div>
+                <b>
+                  {d.title} · {WEEKDAY_SHORT[d.weekday]}
+                </b>
+                <span className="tags">{d.focus}</span>
+                <small>{d.exercises.map((e) => `${e.name} ${e.sets}×${e.min}–${e.max}${e.unit === 'sec' ? 's' : ''}`).join(' · ')}</small>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="note">This is general fitness guidance, not medical advice. If you have an injury or a health condition, check with a doctor or physio first, and stop anything that hurts.</p>
+        <div className="row-action">
+          <button
+            className="btn primary"
+            onClick={() => {
+              dispatch({ t: 'program-set', program: plan.days });
+              onDone();
+            }}
+          >
+            Use this plan
+          </button>
+          {openSettings && (
+            <button
+              className="btn"
+              onClick={() => {
+                dispatch({ t: 'program-set', program: plan.days });
+                openSettings();
+              }}
+            >
+              Use it and edit
+            </button>
+          )}
+          <button className="btn ghost" onClick={() => setPlan(null)}>
+            Change answers
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel picker" aria-label="Build a plan">
+      <h2>Coach builds a plan</h2>
+      <p className="note first">Answer a few questions. Your logged sessions are always kept.</p>
+      <div className="field">
+        <span id="pb-goal">Main goal</span>
+        <div className="chips" role="radiogroup" aria-labelledby="pb-goal">
+          {GOALS.map((g) => (
+            <button key={g.id} role="radio" aria-checked={goal === g.id} onClick={() => setGoal(g.id)}>
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span id="pb-days">Days a week</span>
+        <div className="chips" role="radiogroup" aria-labelledby="pb-days">
+          {[2, 3, 4, 5, 6].map((n) => (
+            <button key={n} role="radio" aria-checked={days === n} onClick={() => setDays(n)}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span id="pb-eq">Equipment</span>
+        <div className="chips" role="radiogroup" aria-labelledby="pb-eq">
+          {EQUIPMENT.map((g) => (
+            <button key={g.id} role="radio" aria-checked={equipment === g.id} onClick={() => setEquipment(g.id)}>
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span id="pb-exp">Experience</span>
+        <div className="chips" role="radiogroup" aria-labelledby="pb-exp">
+          {EXPERIENCE.map((g) => (
+            <button key={g.id} role="radio" aria-checked={experience === g.id} onClick={() => setExperience(g.id)}>
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="note">{latest ? `Your body data: ${fmtWeight(latest.weight)} from your last weigh-in on the Body screen.` : 'No weigh-in yet. Add one on the Body screen if you want the plan to take body mass into account.'}</p>
+      <label className="field">
+        <span>Movements to leave out (optional)</span>
+        <input value={avoid} maxLength={120} placeholder="For example: squats, overhead press" onChange={(e) => setAvoid(e.target.value)} />
+      </label>
+      {note && <p className="err" role="alert">{note}</p>}
+      <div className="row-action">
+        {key ? (
+          <button className="btn primary" disabled={busy} onClick={() => make(true)}>
+            {busy ? 'Building…' : 'Build with my AI key'}
+          </button>
+        ) : null}
+        <button className={key ? 'btn' : 'btn primary'} disabled={busy} onClick={() => make(false)}>
+          {key ? 'Use built-in rules' : 'Build my plan'}
+        </button>
+        <button className="btn ghost" onClick={onBack}>
+          Back
+        </button>
+      </div>
+      {!key && <p className="note">No AI key is connected, so this uses the built-in rules. Connect one on the Advisor screen for a plan written to your answers.</p>}
     </section>
   );
 }
